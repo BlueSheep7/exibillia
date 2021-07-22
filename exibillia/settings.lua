@@ -1,4 +1,3 @@
----@diagnostic disable: lowercase-global
 
 -- TODO:
 -- decide where to save config

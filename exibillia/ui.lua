@@ -1,4 +1,3 @@
----@diagnostic disable: lowercase-global
 
 -- TODO:
 -- sfx mute button
@@ -98,7 +97,7 @@ function draw()
 					if this_msg.user.pic then
 						pp = this_msg.user.pic
 					else
-						pp = Img.default_profile
+						pp = Img.ui.default_profile
 					end
 					love.graphics.draw(pp, Friend_list_w + Padding, y * Text_spacing + scroll + Padding - Font_size/2, 0, Profile_size / pp:getWidth(), Profile_size / pp:getHeight(), 0, 0)
 					

@@ -1,8 +1,5 @@
----@diagnostic disable: lowercase-global
 
 -- TODO:
-
--- Future Feature:
 -- Create vscode syntax highlighting properties
 -- Group chats, multiple friends
 -- File error detection
@@ -41,7 +38,7 @@ function update(dt)
 		if wait_tick > 0 then
 			wait_tick = wait_tick - dt
 			if wait_tick <= 0 then
-				next()
+				wait_func()
 			end
 		end
 		
@@ -86,10 +83,12 @@ function loadStory(name)
 		is_typing = nil
 		
 		wait_tick = 0
+		wait_func = nil
 		
 		story_file = io.open("stories/"..name.."/story.txt")
 		file_line_iter = story_file:lines()
 		file_line_prog = 0
+		labels = {}
 		
 		getHeader()
 		
@@ -146,7 +145,7 @@ function interpret(line)
 		return
 	end
 	
-	print("Text: "..line)
+	-- print("Text: "..line)
 	
 	local continue = false
 	
@@ -154,7 +153,7 @@ function interpret(line)
 	if string.sub(line, 1, 1) == "$" then
 		local bar_exists = string.find(line, "|")
 		if bar_exists then
-			local args = string.split(string.sub(line, bar_exists + 1), "|")
+			local args = removeWS(string.split(string.sub(line, bar_exists + 1), "|"))
 			if Command[string.sub(line, 2, bar_exists - 1)] then
 				continue = Command[string.sub(line, 2, bar_exists - 1)](args)
 			else
@@ -174,26 +173,26 @@ function interpret(line)
 		
 	elseif string.sub(line, 1, 1) == "#" then
 		
-		-- TODO: store position of all labels in order to jump up
+		labels[removeWS(string.sub(line, 2))] = file_line_prog
 		continue = true
 		
 	elseif string.sub(line, 1, 2) == "->" then
 		
-		continue = Command["jump"]({string.sub(line, 3)})
+		continue = Command["jump"]({removeWS(string.sub(line, 3))})
 		
 	elseif string.sub(line, 1, 2) == "-^" then
 			
-		continue = Command["jump_up"]({string.sub(line, 3)})
+		continue = Command["jump_up"]({removeWS(string.sub(line, 3))})
 		
 	elseif string.sub(line, 1, 1) == "?" then
 			
-		continue = Command["question"]({string.sub(line, 2)})
+		continue = Command["question"]({removeWS(string.sub(line, 2))})
 		
 	elseif string.sub(line, 1, 1) == ">" then
 		
-		local short = string.sub(line, 2)
-		local long = nextValidLine()
-		local label = nextValidLine()
+		local short = removeWS(string.sub(line, 2))
+		local long = removeWS(nextValidLine())
+		local label = removeWS(nextValidLine())
 		
 		continue = Command["choice"]({short, long, label})
 		
@@ -208,13 +207,21 @@ function interpret(line)
 	else
 		
 		local colon_pos = string.find(line, ":")
+		local semicolon_pos = string.find(line, ";")
 		
 		if colon_pos then
 			
 			local args = string.split(string.sub(line, colon_pos + 1), "|")
 			table.insert(args, 1, string.sub(line, 1, colon_pos - 1))
 			
-			continue = Command["send"](args)
+			continue = Command["send"](removeWS(args))
+			
+		elseif semicolon_pos then
+			
+			local args = string.split(string.sub(line, semicolon_pos + 1), "|")
+			table.insert(args, 1, string.sub(line, 1, semicolon_pos - 1))
+			
+			continue = Command["send_plain"](removeWS(args))
 			
 		else
 			
@@ -237,8 +244,6 @@ end
 
 Command["char"] = function(args)
 	
-	args = removeWS(args)
-	
 	if args[3] then
 		char[args[1]] = {name = args[2], pic = love.graphics.newImage("stories/"..story_name.."/images/"..args[3])}
 	else
@@ -251,40 +256,58 @@ end
 
 Command["send"] = function(args)
 	
-	args = removeWS(args)
+	wait_tick = 0.5
+	wait_func = function()
+		Command["type"]({args[1]})
+		wait_tick = math.min(math.max(#args[2] / 10, 0.5), 3) -- typing indicator timing
+		wait_func = function()
+			Command["type"]()
+			Command["send_plain"](args)
+			Command["wait"]({0.5})
+		end
+	end
 	
-	L.ui.sendMessage(char[args[1]], string.split(args[2], " "), args[3], true)
+end
+
+Command["send_plain"] = function(args)
 	
-	-- Command["wait"]({1})
+	if args[3] then
+		L.ui.sendMessage(char[args[1]], string.split(args[2], " "), love.graphics.newImage("stories/"..story_name.."/images/"..args[3]))
+	else
+		L.ui.sendMessage(char[args[1]], string.split(args[2], " "))
+	end
 	
 	return true
-	
 	
 end
 
 Command["wait"] = function(args)
 	
-	wait_tick = args[1]
+	if args and args[1] and args[1] > 0 then
+		wait_tick = args[1]
+		wait_func = function() next() end
+	else
+		return true
+	end
 	
 end
 
 Command["jump"] = function(args)
 	
-	local label = removeWS(args[1])
-	
 	while true do
 		
-		local line = nextValidLine()
+		local line = removeWS(nextValidLine())
 		if line == nil then
-			love.errhand("Unable to jump. Label '"..label.."' not found")
+			love.errhand("Unable to jump. Label '"..args[1].."' not found")
 			break
-		elseif line == "#"..label or line == "$label|"..label then
+		elseif line == "#"..args[1] then
 			break
 		end
 		
 	end
 	
 	wait_tick = 0
+	is_typing = nil
 	
 	return true
 	
@@ -292,23 +315,30 @@ end
 
 Command["jump_up"] = function(args)
 	
+	if labels[args[1]] then
+		story_file = io.open("stories/"..story_name.."/story.txt")
+		file_line_iter = story_file:lines()
+		file_line_prog = 0
+		while file_line_prog < labels[args[1]] do
+			nextValidLine()
+		end
+	else
+		love.errhand("Unable to jump up. Label '"..args[1].."' not found")
+	end
 	
-	-- return true
+	return true
 	
 end
 
 Command["question"] = function(args)
 	
-	
-	question = removeWS(args[1])
+	question = args[1]
 	
 	return true
 	
 end
 
 Command["choice"] = function(args)
-	
-	args = removeWS(args)
 	
 	if not replies then
 		replies = {}
@@ -323,7 +353,12 @@ end
 Command["pause"] = function(args)
 	
 	-- do nothing lol
-	print("please do not continue")
+	
+end
+
+Command["resume"] = function(args)
+	
+	return true
 	
 end
 
@@ -366,9 +401,27 @@ end
 
 Command["type"] = function(args)
 	
-	is_typing = char[removeWS(args[1])]
 	
-	return true
+	if args and args[1] then
+		
+		is_typing = char[args[1]]
+		
+		if args[2] then
+			wait_tick = tonumber(args[2])
+			wait_func = function()
+				is_typing = nil
+				next()
+			end
+		else
+			return true
+		end
+		
+	else
+		
+		is_typing = nil
+		return true
+		
+	end
 	
 end
 

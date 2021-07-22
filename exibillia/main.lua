@@ -1,5 +1,5 @@
 -- Library Manager
--- Last Updated: 15/07/2021 --
+-- Last Updated: 22/07/2021 --
 
 
 local debug_mode = true
@@ -112,7 +112,7 @@ end
 function StopAllAudio(tbl)
 	for k,v in pairs (tbl) do
 		if type(v) == "table" then
-			stopAll(v)
+			StopAllAudio(v)
 		else
 			v:stop()
 		end

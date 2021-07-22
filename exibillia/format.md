@@ -96,7 +96,7 @@ or
 $jump_up|[label_name]
 ```
 
-⚠️Important: Avoid jumping upwards as it may be resource intensive, especially in larger story files!
+⚠️Important: Avoid jumping upwards as it may be resource intensive, especially in larger story files! Also be aware that loops may break immersion.
 
 ## Create / change the choice question
 
@@ -128,7 +128,9 @@ $choice|[clickable text 2]|[sent text 2]
 ... (as many choices as needed)
 ```
 
-## Pause when you've ran out of script and you need the player to choose
+⚠️Important: If you do not put a pause this after a choice, the game will continue running commands!
+
+## Pause
 
 ```none
 =
@@ -137,7 +139,16 @@ or
 
 $pause
 ```
-⚠️Important: If you do not put this after a choice, the game will continue running commands!
+
+## Resume
+
+```none
++
+
+or
+
+$resume
+```
 
 ## Clear choice question and options
 
@@ -193,8 +204,10 @@ $sound|[sound_filename]
 ## Custom typing indicator
 
 ```none
-$type|[internal_username]|[typing_time](in seconds)
+$type|[internal_username]|[typing_time](in seconds)(optional)
 ```
+
+Note: To clear the typing indicator, simply do not include a username or typing time.
 
 ## Clear chat
 

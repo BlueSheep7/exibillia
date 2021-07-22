@@ -1,4 +1,3 @@
--- RWL --
 
 function love.conf(t)
 	
