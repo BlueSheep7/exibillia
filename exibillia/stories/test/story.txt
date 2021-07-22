@@ -1,0 +1,95 @@
+
+title: Test
+author: BlueSheep
+version: 1
+desc: hi
+rating: 69
+lang: en
+
+===
+
+$char|friend|IklobSushi716|hina.png
+
+#START
+
+$cls
+
+;[TRANSLATION SERVICE IS NOW ACTIVE]
+
++2
+
+friend:Hey, is it true that humans sleep for 8 hours every Earth day?
+
+>Yes
+	Yeah, more or less.
+	->true
+>No
+	Nah, we usually lie in bed staring at our phones for most of that time.
+	->lie
+
+
++20
+friend:Hello?
++20
+friend:You there?
+=
+
+
+// Lie
+
+#lie
+friend:Oh.
+friend:This human wiki must be out-dated.
++1
+->skip_1
+
+
+// Main story
+
+#true
+
+friend:Wow...
+friend:That's a lot of time
++2
+friend:That's a whole third of your day gone.
++2
+friend:That's 240 hours every Earth month.
++2
+
+>I get it.
+	Yeah yeah. It's a lot.
+	->skip_1
+
+$type|friend|2
+friend:That's 2920 hours every Earth year.
++2
+friend:That's 10950 Earth days over the average human life.
++3
+<
+
+#skip_1
+friend:Sorry.
+
+>How long do eemleens sleep?
+	How long do eemleens sleep?
+	$print|wtf
+=
+
+friend:Well, where I'm from, the sunlight is too dim to have any sort of "daytime".
+friend:The closest thing we do to sleep is resting while we are injured.
+
+
+
+:Ran out of story.
+?What would you like to do?
+>[Restart]
+	Press Send to Restart
+	->START
+>[Exit]
+	Press Send to Exit
+	->exit
+=
+
+#exit
+
+
