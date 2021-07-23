@@ -165,10 +165,10 @@ $erase
 ## Store
 
 ```none
-$set|@[name_of_variable]|[value]
+$set|@[name_of_variable]|[value]|= or + or - or * or / or % (defaults to =)
 ```
 
-Note: Variables can only store numbers.
+Note: Variables can be a number or string.
 
 ## Compare
 
@@ -176,14 +176,14 @@ Note: Variables can only store numbers.
 $if|@[name_of_variable]|== or > or <|[value]
 	[command to be executed]
 ```
-Note: If multiple commands are needed, utilize the jump operator.
+Note: If multiple commands are needed, utilize the jump command.
 
 ## Recall
 
 ```none
 bla bla bla @[name_of_variable] bla bla bla
 ```
-Note: Variables may be placed inside of any command.
+Note: Variables may be used inside of most commands.
 
 # Audio
 

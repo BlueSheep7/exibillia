@@ -27,6 +27,7 @@ Command = {}
 function load()
 	
 	story_loaded = false
+	sound = {}
 	
 end
 
@@ -85,6 +86,8 @@ function loadStory(name)
 		wait_tick = 0
 		wait_func = nil
 		
+		variable = {}
+		
 		story_file = io.open("stories/"..name.."/story.txt")
 		file_line_iter = story_file:lines()
 		file_line_prog = 0
@@ -141,7 +144,7 @@ end
 
 function interpret(line)
 	
-	if not line or removeWS(line) == "" then
+	if not line or line == "" then
 		return
 	end
 	
@@ -157,24 +160,19 @@ function interpret(line)
 			if Command[string.sub(line, 2, bar_exists - 1)] then
 				continue = Command[string.sub(line, 2, bar_exists - 1)](args)
 			else
-				love.errhand("Unknown Custom Command: $"..string.sub(line, 2, bar_exists - 1).." (line "..file_line_prog..")")
+				errhand("Unknown Command: $"..string.sub(line, 2, bar_exists - 1))
 			end
 		else
 			if Command[string.sub(line, 2)] then
 				continue = Command[string.sub(line, 2)]()
 			else
-				love.errhand("Unknown Custom Command: $"..string.sub(line, 2).." (line "..file_line_prog..")")
+				errhand("Unknown Command: $"..string.sub(line, 2))
 			end
 		end
 	
 	elseif string.sub(line, 1, 1) == "+" then
 		
-		continue = Command["wait"]({tonumber(string.sub(line, 2))})
-		
-	elseif string.sub(line, 1, 1) == "#" then
-		
-		labels[removeWS(string.sub(line, 2))] = file_line_prog
-		continue = true
+		continue = Command["wait"]({removeWS(string.sub(line, 2))})
 		
 	elseif string.sub(line, 1, 2) == "->" then
 		
@@ -225,7 +223,7 @@ function interpret(line)
 			
 		else
 			
-			love.errhand("Unknown Command: "..line.." (line "..file_line_prog..")")
+			errhand("Unknown Command: "..line)
 			
 		end
 		
@@ -245,9 +243,9 @@ end
 Command["char"] = function(args)
 	
 	if args[3] then
-		char[args[1]] = {name = args[2], pic = love.graphics.newImage("stories/"..story_name.."/images/"..args[3])}
+		char[args[1]] = {name = replaceVars(args[2]), pic = love.graphics.newImage("stories/"..story_name.."/images/"..args[3])}
 	else
-		char[args[1]] = {name = args[2]}
+		char[args[1]] = {name = replaceVars(args[2])}
 	end
 	
 	return true
@@ -272,9 +270,9 @@ end
 Command["send_plain"] = function(args)
 	
 	if args[3] then
-		L.ui.sendMessage(char[args[1]], string.split(args[2], " "), love.graphics.newImage("stories/"..story_name.."/images/"..args[3]))
+		L.ui.sendMessage(char[args[1]], string.split(replaceVars(args[2]), " "), love.graphics.newImage("stories/"..story_name.."/images/"..args[3]))
 	else
-		L.ui.sendMessage(char[args[1]], string.split(args[2], " "))
+		L.ui.sendMessage(char[args[1]], string.split(replaceVars(args[2]), " "))
 	end
 	
 	return true
@@ -283,9 +281,20 @@ end
 
 Command["wait"] = function(args)
 	
-	if args and args[1] and args[1] > 0 then
-		wait_tick = args[1]
-		wait_func = function() next() end
+	if args and args[1] and args[1] ~= "" then
+		args[1] = replaceVars(args[1])
+		
+		if not tonumber(args[1]) then
+			errhand("Wait time must be a number.")
+			return true
+		end
+		
+		if tonumber(args[1]) > 0 then
+			wait_tick = tonumber(args[1])
+			wait_func = function() next() end
+		else
+			return true
+		end
 	else
 		return true
 	end
@@ -294,11 +303,13 @@ end
 
 Command["jump"] = function(args)
 	
+	args[1] = replaceVars(args[1])
+	
 	while true do
 		
 		local line = removeWS(nextValidLine())
 		if line == nil then
-			love.errhand("Unable to jump. Label '"..args[1].."' not found")
+			errhand("Unable to jump. Label '"..args[1].."' not found.")
 			break
 		elseif line == "#"..args[1] then
 			break
@@ -315,15 +326,18 @@ end
 
 Command["jump_up"] = function(args)
 	
+	args[1] = replaceVars(args[1])
+	
 	if labels[args[1]] then
 		story_file = io.open("stories/"..story_name.."/story.txt")
 		file_line_iter = story_file:lines()
 		file_line_prog = 0
+		labels = {}
 		while file_line_prog < labels[args[1]] do
 			nextValidLine()
 		end
 	else
-		love.errhand("Unable to jump up. Label '"..args[1].."' not found")
+		errhand("Unable to jump up. Label '"..args[1].."' not found.")
 	end
 	
 	return true
@@ -332,7 +346,7 @@ end
 
 Command["question"] = function(args)
 	
-	question = args[1]
+	question = replaceVars(args[1])
 	
 	return true
 	
@@ -344,7 +358,7 @@ Command["choice"] = function(args)
 		replies = {}
 	end
 	
-	table.insert(replies, {short = args[1], long = args[2], command = args[3]})
+	table.insert(replies, {short = replaceVars(args[1]), long = replaceVars(args[2]), command = args[3]})
 	
 	return true
 	
@@ -373,15 +387,116 @@ end
 
 Command["set"] = function(args)
 	
+	if not args or not args[1] or string.sub(args[1], 1, 1) ~= "@" then
+		errhand("Invalid variable name.")
+		return true
+	end
 	
-	-- return true
+	local var_name = string.sub(args[1], 2)
+	
+	args[2] = replaceVars(args[2])
+	
+	if not args[3] or args[3] == "=" then
+		
+		if tonumber(args[2]) then
+			variable[var_name] = tonumber(args[2])
+		else
+			variable[var_name] = args[2]
+		end
+		
+	else
+		
+		if not variable[var_name] then
+			errhand("Variable '"..args[1].."' not found.")
+			return true
+		elseif not tonumber(variable[var_name]) then
+			errhand("Unable to execute math on string '"..args[1].."'.")
+			return true
+		end
+		
+		if args[3] == "+" then
+			variable[var_name] = variable[var_name] + tonumber(args[2])
+		elseif args[3] == "-" then
+			variable[var_name] = variable[var_name] - tonumber(args[2])
+		elseif args[3] == "*" then
+			variable[var_name] = variable[var_name] * tonumber(args[2])
+		elseif args[3] == "/" then
+			variable[var_name] = variable[var_name] / tonumber(args[2])
+		elseif args[3] == "%" then
+			variable[var_name] = variable[var_name] % tonumber(args[2])
+		else
+			errhand("Unknown math operator: "..args[3])
+		end
+		
+	end
+		
+	return true
 	
 end
 
 Command["if"] = function(args)
 	
+	local action = removeWS(nextValidLine())
 	
-	-- return true
+	if not args or not args[1] or not args[2] or not args[3] then
+		errhand("Missing arguments.")
+		return true
+	end
+	
+	args[1] = replaceVars(args[1])
+	args[3] = replaceVars(args[3])
+	
+	if tonumber(args[1]) then
+		args[1] = tonumber(args[1])
+	end
+	if tonumber(args[3]) then
+		args[3] = tonumber(args[3])
+	end
+	
+	if args[2] == "==" or args[2] == "=" then
+		if args[1] == args[3] then
+			interpret(action)
+			return false
+		end
+	elseif args[2] == "!=" or args[2] == "~=" then
+		if args[1] ~= args[3] then
+			interpret(action)
+			return false
+		end
+	else
+		if type(args[1]) == "string" or type(args[3]) == "string" then
+			errhand("Unable to do mathematical comparison on string.")
+			return true
+		end
+		
+		if args[2] == ">" then
+			if args[1] > args[3] then
+				interpret(action)
+				return false
+			end
+		elseif args[2] == "<" then
+			if args[1] < args[3] then
+				interpret(action)
+				return false
+			end
+		elseif args[2] == ">=" then
+			if args[1] >= args[3] then
+				interpret(action)
+				return false
+			end
+		elseif args[2] == "<=" then
+			if args[1] <= args[3] then
+				interpret(action)
+				return false
+			end
+		else
+			errhand("Unknown comparison type: '"..args[2].."'.")
+			return true
+		end
+		
+	end
+	
+	return true
 	
 end
 
@@ -394,19 +509,33 @@ end
 
 Command["sound"] = function(args)
 	
+	arg[1] = replaceVars(arg[1])
 	
-	-- return true
+	if not sound[args[1]] then
+		sound[args[1]] = love.audio.newSource("stories/"..story_name.."/sounds/"..args[1], "static")
+	end
+	
+	sound[args[1]]:stop()
+	sound[args[1]]:play()
+	
+	return true
 	
 end
 
 Command["type"] = function(args)
-	
 	
 	if args and args[1] then
 		
 		is_typing = char[args[1]]
 		
 		if args[2] then
+			args[2] = replaceVars(args[2])
+			
+			if not tonumber(args[2]) then
+				errhand("Typing time must be a number.")
+				return true
+			end
+			
 			wait_tick = tonumber(args[2])
 			wait_func = function()
 				is_typing = nil
@@ -435,7 +564,7 @@ end
 
 Command["print"] = function(args)
 	
-	print(args[1])
+	print(replaceVars(args[1]))
 	
 	return true
 	
@@ -458,6 +587,7 @@ function nextValidLine()
 	if line then
 		
 		if line == "" or string.sub(line, 1, 2) == "//" then
+			-- blank line or comment
 			return nextValidLine()
 		elseif string.sub(line, 1, 2) == "/*" then
 			-- multiline comment
@@ -470,6 +600,10 @@ function nextValidLine()
 					return nextValidLine()
 				end
 			end
+		elseif string.sub(line, 1, 1) == "#" then
+			-- label
+			labels[removeWS(string.sub(line, 2))] = file_line_prog
+			return nextValidLine()
 		else
 			return line
 		end
@@ -484,6 +618,7 @@ end
 function removeWS(str)
 	
 	if type(str) == "string" then
+		
 		local leading_pos = 0
 		for pos = 1, #str do
 			if string.sub(str, pos, pos) ~= " " and string.sub(str, pos, pos) ~= "\t" then
@@ -508,6 +643,32 @@ function removeWS(str)
 		return t
 	end
 	
+end
+
+function replaceVars(str)
+	
+	if type(str) == "string" then
+		
+		for index, this in pairs (variable) do
+			str = string.gsub(str, "@"..index, this)
+		end
+		return str
+		
+	elseif type(str) == "table" then
+		local t = {}
+		for index, this in pairs (str) do
+			t[index] = replaceVars(this)
+		end
+		return t
+		
+	elseif type(str) == "number" then
+		return str
+	end
+	
+end
+
+function errhand(str)
+	love.errhand(str.." (line "..file_line_prog..")")
 end
 
 

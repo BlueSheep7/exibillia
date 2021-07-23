@@ -519,6 +519,11 @@ function keypressed(key)
 		
 		if key == "backspace" then
 			username = string.sub(username, 1, #username - 1)
+		elseif key == "return" then
+			L.story.loadStory(selected_story, username, profile_pic)
+			
+			show_profile_settings = false
+			show_chat = true
 		end
 		
 		return true
