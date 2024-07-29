@@ -3,6 +3,10 @@
 -- sfx mute button
 -- colour theme
 -- multiple chats
+-- speed modifier
+-- first msg doesnt scroll bug
+-- emoji support
+-- send sound effect
 
 local P = {}
 for index, this in pairs(_G) do
@@ -10,12 +14,13 @@ for index, this in pairs(_G) do
 end
 setfenv(1, P)
 
-interact_weight = 1
-DrawAdd(P, "ui", 1)
+interact_weight = -1
+DrawAdd(P, "ui", -1)
 
 -- Constants
 Scale = 1
 Font_size = 15
+Title_font_size = 50
 Profile_size = 40
 Padding = 30
 Friend_list_w = 250
@@ -27,12 +32,15 @@ Auto_scroll_speed = 1000
 Caret_speed = 0.5
 Profile_settings_w = 400
 Profile_settings_h = 150
+Title_time = 3
 
 Cursor = {}
 Cursor.arrow = love.mouse.getSystemCursor("arrow")
 Cursor.hand = love.mouse.getSystemCursor("hand")
 
-Main_font = love.graphics.newFont(Font_size * Scale) -- must be re-loaded if scale is changed
+-- must be re-loaded if scale is changed
+Main_font = love.graphics.newFont(Font_size * Scale)
+Title_font = love.graphics.newFont(Title_font_size * Scale)
 
 -- Built In Functions
 
@@ -52,9 +60,12 @@ function load()
 	type_sound_tick = 0
 	selected_reply = 1
 	typed_reply = nil
+	title_text = nil
+	title_sub_text = nil
+	title_tick = Title_time
 	
 	username = ""
-	selected_story = "test"
+	selected_story = "test_horror"
 	
 end
 
@@ -233,6 +244,9 @@ function draw()
 			love.graphics.rectangle("fill", getResX()/2 - Profile_settings_w/2 + 25, getResY()/2 - 100/2, 100, 100)
 			love.graphics.setColor(40/255, 40/255, 40/255)
 			love.graphics.draw(Img.ui.default_profile, getResX()/2 - Profile_settings_w/2 + 25, getResY()/2 - 100/2)
+			love.graphics.setColor(1, 1, 1)
+			love.graphics.setFont(Main_font)
+			love.graphics.printf("Drag an image file here if you want", getResX()/2 - Profile_settings_w/2 + 25, getResY()/2 - 100/2, 100, "center")
 		end
 		
 		-- username text box
@@ -262,6 +276,25 @@ function draw()
 		
 	end
 	
+	-- Title Card --
+	if title_tick < Title_time then
+		
+		love.graphics.setColor(0, 0, 0, math.min((Title_time - title_tick)*3 / Title_time, 1))
+		love.graphics.rectangle("fill", 0, 0, getResX(), getResY())
+		
+		love.graphics.setColor(1, 1, 1, math.min((Title_time - title_tick)*3 / Title_time, 1))
+		love.graphics.setFont(Title_font)
+		
+		if title_text then
+			love.graphics.print(title_text, getResX()/2 - Title_font:getWidth(title_text)/2, getResY()/2 - Title_font_size/2)
+		end
+		
+		if title_sub_text then
+			love.graphics.printf(title_sub_text, 0, getResY()/2 + Title_font_size/2 * 2, getResX() * 2, "center", 0, 0.5, 0.5)
+		end
+		
+	end
+	
 end
 
 function update(dt)
@@ -271,6 +304,15 @@ function update(dt)
 	if caret_tick > Caret_speed then
 		caret_tick = caret_tick - Caret_speed
 		caret_show = not caret_show
+	end
+	
+	-- Title Card --
+	if title_tick < Title_time then
+		title_tick = title_tick + dt
+		
+		if title_tick >= Title_time then
+			L.story.next()
+		end
 	end
 	
 	if show_chat then
@@ -416,7 +458,8 @@ function mousepressed(mx_true, my_true, button)
 			-- end
 			
 			if L.story.replies then
-				if not L.story.reply_choice then
+				
+				if not typed_reply then
 					
 					-- reply box --
 					local x
@@ -449,15 +492,17 @@ function mousepressed(mx_true, my_true, button)
 						
 					end
 					
+					-- delete msg button --
+					if isWithin(mx, my, getResX() - Padding*2 - Img.ui.send:getWidth() - Img.ui.x:getWidth(), getResY() - Padding - Reply_box_h/2 - Img.ui.send:getHeight()/2, Img.ui.send:getWidth(), Img.ui.send:getHeight()) then
+						
+						backspaceReply()
+						
+						return true
+						
+					end
+					
 				end
-			end
-			
-			-- delete msg button --
-			if isWithin(mx, my, getResX() - Padding*2 - Img.ui.send:getWidth() - Img.ui.x:getWidth(), getResY() - Padding - Reply_box_h/2 - Img.ui.send:getHeight()/2, Img.ui.send:getWidth(), Img.ui.send:getHeight()) then
 				
-				backspaceReply()
-				
-				return true
 				
 			end
 			
@@ -636,6 +681,7 @@ end
 function sendMessage(user, msg, img)
 	
 	table.insert(L.story.chat_log, {user = user, text = msg, img = img})
+	-- Calc.max_scroll()
 	
 	if auto_scrolling or scroll == max_scroll then
 		Calc.max_scroll()
@@ -693,6 +739,7 @@ end
 
 function printF(text, x, y)
 	love.graphics.print(text, x, y, 0, 1/Scale, 1/Scale, 0, Main_font:getHeight()/2)
+	-- print(text)
 end
 
 

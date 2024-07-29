@@ -120,7 +120,7 @@ function StopAllAudio(tbl)
 end
 
 
--- Draw Functions --
+-- Draw Table --
 -- Add items to draw_table along with it's origin library in order for the draw function inside the library to be called.
 -- Items will be drawn in order of y value
 
@@ -176,6 +176,46 @@ function DrawUpdateY(id, y) -- SUPER INEFFICIENT. PLEASE REDO --
 	end
 end
 
+-- Interact Table --
+-- Each library may give itself a value of importance to determine the order in which the libraries' interaction functions are called
+-- The smaller the value of interact_weight, the earlier the library is called upon
+local interact_table = {}
+
+function InteractAdd(package)
+	if #interact_table == 0 or package.interact_weight > interact_table[#interact_table].interact_weight then
+		table.insert(interact_table, package)
+	elseif package.interact_weight == interact_table[#interact_table].interact_weight then
+		love.errhand("Overlap found in interact table at "..package.name.." ("..package.interact_weight..")")
+	else
+		for index, this in pairs(interact_table) do
+			if package.interact_weight == this.interact_weight then
+				love.errhand("Overlap found in interact table at "..package.name)
+			elseif package.interact_weight < this.interact_weight then
+				table.insert(interact_table, index, package)
+				break
+			end
+		end
+	end
+end
+
+-- Library Loader --
+function LoadLibrary(path, name)
+	io.write("Loading library: "..path.."...")
+	local t = os.clock()
+	if not name then
+		name = string.sub(path, 1, #path - 4)
+	end
+	local package = require(string.sub(path, 1, #path - 4))
+	if package ~= true then
+		L[name] = package
+		L[name].name = name
+	end
+	if package.interact_weight then
+		InteractAdd(package)
+	end
+	print("done. ("..(os.clock()-t).."s)")
+end
+
 
 -- Load in assets --
 
@@ -205,42 +245,8 @@ local name, package
 for _, this in pairs(file) do
 	if string.sub(this, #this - 3) == ".lua" then
 		if this ~= "main.lua" and this ~= "conf.lua" then
-			t = os.clock()
-			name = string.sub(this, 1, #this - 4)
-			io.write("Loading library: "..this.."...")
-			package = require(name)
-			if package ~= true then
-				L[name] = package
-				L[name].name = name
-			end
-			print("done. ("..(os.clock()-t).."s)")
+			LoadLibrary(this)
 		end
-	end
-end
-
-
--- Interact Table --
--- Each library may give itself a value of importance to determine the order in which the libraries' interaction functions are called
--- The smaller the value of interact_weight, the earlier the library is called upon
-local interact_table = {}
-for L_index, L_value in pairs(L) do
-	if L_value.interact_weight then
-		
-		if #interact_table == 0 or L_value.interact_weight > interact_table[#interact_table].interact_weight then
-			table.insert(interact_table, L_value)
-		elseif L_value.interact_weight == interact_table[#interact_table].interact_weight then
-			love.errhand("Overlap found in interact table at "..L_index.." ("..L_value.interact_weight..")")
-		else
-			for index, this in pairs(interact_table) do
-				if L_value.interact_weight == this.interact_weight then
-					love.errhand("Overlap found in interact table at "..L_index)
-				elseif L_value.interact_weight < this.interact_weight then
-					table.insert(interact_table, index, L_value)
-					break
-				end
-			end
-		end
-		
 	end
 end
 
@@ -296,7 +302,7 @@ function love.draw()
 			if type(this.id) == "string" then
 				love.graphics.print(this.library.name.." - "..this.id..": "..this.y, 0, index * 15)
 			else
-				love.graphics.print(this.library.name..": "..this.y, 0, index * 15)
+				love.graphics.print(this.library.name.." - "..string.upper(type(this.id))..": "..this.y, 0, index * 15)
 			end
 		end
 	end

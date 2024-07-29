@@ -6,6 +6,13 @@
 -- Syntax error detection
 -- Custom error handler / log
 -- Text formatting (bold / italic)
+-- Smart typing speed adjusted for average reading speed
+-- possible wait + choice bug?
+-- variables that transcend saves
+
+
+-- type each key to type
+-- alt + key to choose
 
 local P = {}
 for index, this in pairs(_G) do
@@ -17,6 +24,7 @@ setfenv(1, P)
 -- Constants
 
 Max_messages = 20
+Force_Choice_Messages = false
 
 Headers = {"title", "author", "version", "desc", "rating", "lang"}
 Command = {}
@@ -41,6 +49,28 @@ function update(dt)
 			if wait_tick <= 0 then
 				wait_func()
 			end
+		end
+		
+		if music_to_play then
+			
+			music_fade_tick = music_fade_tick + dt
+			
+			if music_fade_tick >= music_fade_time then
+				music_to_play:setVolume(1)
+				if music_playing then
+					music_playing:stop()
+				end
+				music_playing = music_to_play
+				music_to_play = nil
+			else
+				
+				if music_playing then
+					music_playing:setVolume(1 - (music_fade_tick / music_fade_time))
+				end
+				music_to_play:setVolume(music_fade_tick / music_fade_time)
+				
+			end
+			
 		end
 		
 	end
@@ -72,11 +102,21 @@ function loadStory(name)
 		
 		story_loaded = true
 		story_name = name
-		progress = 1
+		story_path = "stories/"..story_name
 		
 		char = {}
-		me = {name = "You", pic = love.graphics.newImage("stories/"..name.."/images/me.png")}
+		me = {}
 		char["me"] = me
+		if L.ui.username and L.ui.username ~= "" then
+			me.name = L.ui.username
+		else
+			me.name = "You"
+		end
+		if L.ui.profile_pic then
+			me.pic = L.ui.profile_pic
+		else
+			-- me.pic = love.graphics.newImage(story_path.."/images/ai.png")
+		end
 		
 		chat_log = {}
 		replies = nil
@@ -88,7 +128,25 @@ function loadStory(name)
 		
 		variable = {}
 		
-		story_file = io.open("stories/"..name.."/story.txt")
+		music = {}
+		local p = story_path.."/music"
+		for _, this in pairs (love.filesystem.getDirectoryItems(p)) do
+			if love.filesystem.getInfo(p.."/"..this).type == "file" and (string.sub(this, #this - 3) == ".ogg" or string.sub(this, #this - 3) == ".wav" or string.sub(this, #this - 3) == ".mp3") then
+				music[this] = love.audio.newSource(p.."/"..this, "stream")
+			end
+		end
+		music_playing = nil
+		music_to_play = nil
+		music_fade_time = 0
+		music_fade_tick = 0
+		music_queued = nil
+		
+		local p = story_path.."/scripts"
+		for _, this in pairs (love.filesystem.getDirectoryItems(p)) do
+			LoadLibrary(p.."/"..this, story_name.."_"..string.sub(this, 1, #this - 4))
+		end
+		
+		story_file = io.open(story_path.."/story.txt")
 		file_line_iter = story_file:lines()
 		file_line_prog = 0
 		labels = {}
@@ -135,7 +193,7 @@ function next()
 	local line = nextValidLine()
 	
 	if line then
-		interpret(removeWS(line))
+		interpret(line)
 	else
 		Command["end"]()
 	end
@@ -157,22 +215,28 @@ function interpret(line)
 		local bar_exists = string.find(line, "|")
 		if bar_exists then
 			local args = removeWS(string.split(string.sub(line, bar_exists + 1), "|"))
-			if Command[string.sub(line, 2, bar_exists - 1)] then
-				continue = Command[string.sub(line, 2, bar_exists - 1)](args)
+			local command = removeWS(string.sub(line, 2, bar_exists - 1))
+			if Command[command] then
+				continue = Command[command](args)
 			else
-				errhand("Unknown Command: $"..string.sub(line, 2, bar_exists - 1))
+				errhand("Unknown Command: $"..command)
 			end
 		else
-			if Command[string.sub(line, 2)] then
-				continue = Command[string.sub(line, 2)]()
+			local command = removeWS(string.sub(line, 2))
+			if Command[command] then
+				continue = Command[command]()
 			else
-				errhand("Unknown Command: $"..string.sub(line, 2))
+				errhand("Unknown Command: $"..command)
 			end
 		end
 	
 	elseif string.sub(line, 1, 1) == "+" then
 		
 		continue = Command["wait"]({removeWS(string.sub(line, 2))})
+		
+	elseif string.sub(line, 1, 1) == "#" then
+		
+		continue = true
 		
 	elseif string.sub(line, 1, 2) == "->" then
 		
@@ -243,7 +307,7 @@ end
 Command["char"] = function(args)
 	
 	if args[3] then
-		char[args[1]] = {name = replaceVars(args[2]), pic = love.graphics.newImage("stories/"..story_name.."/images/"..args[3])}
+		char[args[1]] = {name = replaceVars(args[2]), pic = love.graphics.newImage(story_path.."/images/"..args[3])}
 	else
 		char[args[1]] = {name = replaceVars(args[2])}
 	end
@@ -254,14 +318,28 @@ end
 
 Command["send"] = function(args)
 	
-	wait_tick = 0.5
-	wait_func = function()
-		Command["type"]({args[1]})
-		wait_tick = math.min(math.max(#args[2] / 10, 0.5), 3) -- typing indicator timing
+	if args[1] == "me" and Force_Choice_Messages then
+		Command["choice"]({args[2], args[2], "+"})
+		
+	elseif args[1] == "" or not args[1] or args[1] == "me" then
+		wait_tick = 2
 		wait_func = function()
-			Command["type"]()
 			Command["send_plain"](args)
 			Command["wait"]({0.5})
+			Sound.key_enter:stop()
+			Sound.key_enter:play()
+		end
+		
+	else
+		wait_tick = 0.5
+		wait_func = function()
+			Command["type"]({args[1]})
+			wait_tick = math.min(math.max(#args[2] / 10, 0.5), 2) -- typing indicator timing
+			wait_func = function()
+				Command["type"]()
+				Command["send_plain"](args)
+				Command["wait"]({0.5})
+			end
 		end
 	end
 	
@@ -269,15 +347,21 @@ end
 
 Command["send_plain"] = function(args)
 	
-	if args[3] then
-		L.ui.sendMessage(char[args[1]], string.split(replaceVars(args[2]), " "), love.graphics.newImage("stories/"..story_name.."/images/"..args[3]))
+	if args[2] and args[2] ~= "" then
+		args[2] = string.split(replaceVars(args[2]), " ")
 	else
-		L.ui.sendMessage(char[args[1]], string.split(replaceVars(args[2]), " "))
+		args[2] = nil
 	end
+	if args[3] then
+		args[3] = love.graphics.newImage(story_path.."/images/"..args[3])
+	end
+	
+	L.ui.sendMessage(char[args[1]], args[2], args[3])
 	
 	return true
 	
 end
+
 
 Command["wait"] = function(args)
 	
@@ -329,11 +413,12 @@ Command["jump_up"] = function(args)
 	args[1] = replaceVars(args[1])
 	
 	if labels[args[1]] then
-		story_file = io.open("stories/"..story_name.."/story.txt")
+		local stop_line = labels[args[1]]
+		story_file = io.open(story_path.."/story.txt")
 		file_line_iter = story_file:lines()
 		file_line_prog = 0
 		labels = {}
-		while file_line_prog < labels[args[1]] do
+		while file_line_prog < stop_line do
 			nextValidLine()
 		end
 	else
@@ -387,12 +472,12 @@ end
 
 Command["set"] = function(args)
 	
-	if not args or not args[1] or string.sub(args[1], 1, 1) ~= "@" then
+	if not args or not args[1] or string.sub(args[1], 1, 1) ~= "%" or string.sub(args[1], #args[1]) ~= "%" then
 		errhand("Invalid variable name.")
 		return true
 	end
 	
-	local var_name = string.sub(args[1], 2)
+	local var_name = string.sub(args[1], 2, #args[1]-1)
 	
 	args[2] = replaceVars(args[2])
 	
@@ -502,17 +587,72 @@ end
 
 Command["music"] = function(args)
 	
+	if not args or not args[1] or not music[args[1]] then
+		errhand("Unable to load music file: "..args[1])
+		return true
+	end
 	
-	-- return true
+	args[1] = replaceVars(args[1])
+	args[2] = replaceVars(args[2])
+	
+	if args[2] then
+		
+		music_to_play = music[args[1]]
+		
+		music_to_play:setLooping(true)
+		music_to_play:setVolume(0)
+		music_to_play:play()
+		
+		music_fade_tick = 0
+		
+		music_fade_time = tonumber(args[2])
+		
+	else
+		
+		if music_playing then
+			music_playing:stop()
+		end
+		
+		music_playing = music[args[1]]
+		music_playing:play()
+		music_playing:setLooping(true)
+		
+	end
+	
+	
+	return true
+	
+end
+
+Command["music_stop"] = function(args)
+	
+	if args and args[1] then
+		
+		args[1] = replaceVars(args[1])
+		-- TODO: Fade out
+		
+	else
+		
+		if music_playing then
+			music_playing:stop()
+		end
+		
+	end
+	
+end
+
+Command["music_q"] = function(args)
+	
+	-- music_queued
 	
 end
 
 Command["sound"] = function(args)
 	
-	arg[1] = replaceVars(arg[1])
+	args[1] = replaceVars(args[1])
 	
 	if not sound[args[1]] then
-		sound[args[1]] = love.audio.newSource("stories/"..story_name.."/sounds/"..args[1], "static")
+		sound[args[1]] = love.audio.newSource(story_path.."/sounds/"..args[1], "static")
 	end
 	
 	sound[args[1]]:stop()
@@ -562,6 +702,16 @@ Command["cls"] = function(args)
 	
 end
 
+Command["title"] = function(args)
+	
+	L.ui.title_text = args[1]
+	if args[2] then
+		L.ui.title_sub_text = args[2]
+	end
+	L.ui.title_tick = 0
+	
+end
+
 Command["print"] = function(args)
 	
 	print(replaceVars(args[1]))
@@ -574,6 +724,8 @@ Command["end"] = function(args)
 	
 	print("End of story reached")
 	
+	love.event.quit()
+	
 end
 
 
@@ -583,6 +735,8 @@ function nextValidLine()
 	
 	local line = file_line_iter()
 	file_line_prog = file_line_prog + 1
+	
+	line = removeWS(line)
 	
 	if line then
 		
@@ -603,7 +757,7 @@ function nextValidLine()
 		elseif string.sub(line, 1, 1) == "#" then
 			-- label
 			labels[removeWS(string.sub(line, 2))] = file_line_prog
-			return nextValidLine()
+			return line
 		else
 			return line
 		end
@@ -650,7 +804,7 @@ function replaceVars(str)
 	if type(str) == "string" then
 		
 		for index, this in pairs (variable) do
-			str = string.gsub(str, "@"..index, this)
+			str = string.gsub(str, "%"..index.."%", this)
 		end
 		return str
 		

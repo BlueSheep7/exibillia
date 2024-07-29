@@ -32,7 +32,7 @@ lang: [Language] (ISO code)
 ```none
 $char|[internal_username]|[username]|[picture_path](optional)
 ```
-Note: Use the keyword 'me' when referencing the player's username, picture, etc.
+Note: Use the keyword 'me' when referencing the player
 
 ## Sending messages
 
@@ -160,43 +160,63 @@ or
 $erase
 ```
 
+Note: This is done automatically when the player submits a choice.
+
 # Logic
 
 ## Store
 
 ```none
-$set|@[name_of_variable]|[value]|= or + or - or * or / or % (defaults to =)
+$set|%[name_of_variable]%|[value]|[mathematical operator](defaults to =)
 ```
+
+Note: The mathimatical operator can be any of these: '=' '+' '-' '*' '/' '%'
 
 Note: Variables can be a number or string.
 
 ## Compare
 
 ```none
-$if|@[name_of_variable]|== or > or <|[value]
+$if|[value or variable]}|[comparison operator]|[value or variable]
 	[command to be executed]
 ```
+Note: The comparison operator can be any of these: '==' '!=' '>' '<' '>=' '<='
+
 Note: If multiple commands are needed, utilize the jump command.
 
 ## Recall
 
 ```none
-bla bla bla @[name_of_variable] bla bla bla
+bla bla bla %[name_of_variable]% bla bla bla
 ```
 Note: Variables may be used inside of most commands.
 
 # Audio
 
-## Change music
-
-```none
-$music|[music_filename]|[transition_time](in seconds)
-```
-
 ## Play sound effect
 
 ```none
-$sound|[sound_filename]
+$sound|[sound_file_path]
+```
+
+Note: Don't forget the sound file's file extension.
+
+## Start / change music
+
+```none
+$music|[music_file_path](optional)|[transition_time](in seconds)(optional)
+```
+
+## Stop / fade out music
+
+```none
+$music_stop|[fade_out_time](in seconds)(optional)
+```
+
+## Queue a song to play after the current one is finished
+
+```none
+$music_q|[music_file_path]
 ```
 
 # Misc
