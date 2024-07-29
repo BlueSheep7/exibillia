@@ -36,7 +36,9 @@ function load()
 	
 	
 	-- Load settings from config file
-	local dat = love.filesystem.read("settings.cfg")
+	if not BROWSER_MODE then
+		local dat = love.filesystem.read("settings.cfg")
+	end
 	
 	if dat then
 		
@@ -86,6 +88,8 @@ end
 -- Common Functions
 
 function save()
+	
+	if BROWSER_MODE then return end
 	
 	local dat = ""
 	

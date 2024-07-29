@@ -128,6 +128,8 @@ $choice|[clickable text 2]|[sent text 2]
 ... (as many choices as needed)
 ```
 
+Note: You may use ditto marks (") as the send text if the send text is the same as the clickable text.
+
 ⚠️Important: If you do not put a pause this after a choice, the game will continue running commands!
 
 ## Pause
@@ -187,7 +189,7 @@ Note: If multiple commands are needed, utilize the jump command.
 ## Recall
 
 ```none
-bla bla bla %[name_of_variable]% bla bla bla
+me: Looks like %[name_of_variable]% seconds have passed.
 ```
 Note: Variables may be used inside of most commands.
 
@@ -232,7 +234,7 @@ Note: To clear the typing indicator, simply do not include a username or typing 
 ## Clear chat
 
 ```none
-$cls
+$clear
 ```
 
 ## Console log
@@ -259,4 +261,4 @@ multiline comment
 */
 ```
 
-Note: Comments must be on their own line.
+Note: Comments must be on their own line, separate from commands.

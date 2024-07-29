@@ -1,0 +1,164 @@
+
+title: Test
+author: BlueSheep
+version: 1
+desc: hi
+rating: 1
+lang: en
+
+===
+
+$char | friend | PinkMink | hina.png
+
+//$music|next_colour_planet_remix_loop.wav|5
+//$start_game
+
+
+#START
+
+// DAY 3
+$cls
+$title| Day 3 | Sample Text
+
+friend: Hey, I just got a pet snake?
+friend: Wanna see?
+
+>Sure
+	Sure!
+	->yes
+>No
+	No.
+	->no
+=
+
+#no
+friend: Too bad, here he is.
+
+#yes
+friend:|snek.jpg
+friend: Isn't he cute?
+
+>Yes
+	Totally!
+	friend: :)
+>No
+	Nope.
+	friend: Aw, come on. The devs spent so much time drawing that.
+=
+
+
+
++2
+
+
+friend: By the way, what do you like to do for fun?
+
+>Videos Games
+	I like playing video games.
+	+
+>Movies
+	I like watching movies.
+	+
+>Anime
+	I like watching anime.
+	+
+>Music
+	I like chilling and listening to music.
+	+
+=
+
++1
+me: What about you?
+
+friend: Hmmm.
+friend: I guess I like everything.
+friend: 'Fun' is subjective.
+friend: So I could see myself getting into literally anything and enjoying it all the same.
+
+>That's smart.
+	Wow, that's a good way to see it.
+	friend: thank you!
+>Yea right.
+	So you're saying you could have fun killing people?
+	->murder
+=
+
+->after
+#murder
+friend: Well, I probably wouldn't get very far without getting caught...
+friend: But Ted Bundy clearly found enjoyment in it XD.
+#after
+
++3
+friend: Favourite Colour?
+
+>Blue
+	I like blue.
+	+
+>Red
+	I like red.
+	+
+>Green
+	I like green.
+	+
+>Purple
+	I like purple.
+	+
+>Black
+	I like black.
+	+
+>Pink
+	I like pink.
+	+
+>Yellow
+	I like yellow.
+	+
+>Orange
+	I like orange.
+	+
+=
+
+friend: very nice.
+
++1
+me: You?
+friend: I'll give you one hint.
+friend: It's in my username :)
++1
+me: Hmm....
++1
+me: ink?
+friend: Yes... specifically PINK ink.
+
+>Favourite Food?
+	Favourite Food?
+	+
+=
+
++1
+me: wait, is that in your username too?
+
+friend: NO! I would never eat a mink.
+friend: Besides, I'm on a vegetarian diet.
+
++1
+me: oh, so what do you eat?
+
+friend: mostly junk food.
+friend: you can never go wrong with icecream.
+
+
+
+:Ran out of story.
+?What would you like to do?
+>[Restart]
+	Press Send to Restart
+	-^START
+>[Exit]
+	Press Send to Exit
+	->END
+=
+
+#END
+
+

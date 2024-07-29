@@ -1,10 +1,11 @@
 -- Library Manager
 -- Last Updated: 22/07/2021 --
 
+BROWSER_MODE = true
 
 local debug_mode = true
 local debug_toggle_key = "f3"
-local debug_time_scale = 3
+local debug_time_scale = 10
 local debug_time_key = "rshift"
 local debug_quit_tick = 0
 local debug_font = love.graphics.newFont(12)
@@ -229,7 +230,11 @@ print("done. ("..(os.clock()-t).."s)")
 t = os.clock()
 io.write("Loading music and sounds...")
 Sound = LoadSounds("sounds", "static")
-Music = LoadSounds("music", "stream")
+if BROWSER_MODE then
+	Music = LoadSounds("music", "static")
+else
+	Music = LoadSounds("music", "stream")
+end
 print("done. ("..(os.clock()-t).."s)")
 
 t = os.clock()

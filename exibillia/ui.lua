@@ -1,745 +1,673 @@
+-- GUI library thing by BlueSheep7 --
+
 
 -- TODO:
--- sfx mute button
--- colour theme
--- multiple chats
--- speed modifier
--- first msg doesnt scroll bug
--- emoji support
--- send sound effect
+
+-- touchscreen?
+-- controller support
+-- keyboard navigation
+-- better individual element animation control
+-- label text outline
+-- better cursor hint edge of window detection
+-- line width corrections
+
+-- SAMPLE CODE: --
+--[[
+ui = require("ui")
+
+function love.load()
+	view = ui.view{w = love.graphics.getWidth(), h = love.graphics.getHeight(),
+		ui.button{title = "test", x = 100, y = 100},
+	}
+	view:open()
+end
+
+function love.draw()
+	ui.draw()
+end
+
+function love.update(dt)
+	ui.update(dt)
+end
+
+function love.keypressed(key)
+	ui.keypressed(key)
+end
+
+function love.mousepressed(mx, my, button)
+	ui.mousepressed(mx, my, button)
+end
+
+function love.mousereleased(mx, my, button)
+	ui.mousereleased(mx, my, button)
+end
+
+function love.textinput(text)
+	ui.textinput(text)
+end
+]]
+
 
 local P = {}
-for index, this in pairs(_G) do
-	P[index] = this
+
+P.interact_weight = 0
+
+
+-- Cursor --
+local Cursor = {}
+if love.mouse.isCursorSupported() then
+	Cursor.arrow = love.mouse.getSystemCursor("arrow")
+	Cursor.hand = love.mouse.getSystemCursor("hand")
+	Cursor.ibeam = love.mouse.getSystemCursor("ibeam")
 end
-setfenv(1, P)
+local Default_cursor = Cursor.arrow
+local render_cursor, cursor_hint
+local pressing, keyboard_focus
 
-interact_weight = -1
-DrawAdd(P, "ui", -1)
 
--- Constants
-Scale = 1
-Font_size = 15
-Title_font_size = 50
-Profile_size = 40
-Padding = 30
-Friend_list_w = 250
-Reply_box_h = 50
-Text_spacing = Font_size + 10
-Scroll_bar_h = 150
-Type_speed = 60 -- characters per second
-Auto_scroll_speed = 1000
-Caret_speed = 0.5
-Profile_settings_w = 400
-Profile_settings_h = 150
-Title_time = 3
+-- Fonts --
+local menu_font = love.graphics.newFont(15) -- reload on scale change
 
-Cursor = {}
-Cursor.arrow = love.mouse.getSystemCursor("arrow")
-Cursor.hand = love.mouse.getSystemCursor("hand")
 
--- must be re-loaded if scale is changed
-Main_font = love.graphics.newFont(Font_size * Scale)
-Title_font = love.graphics.newFont(Title_font_size * Scale)
+-- UI Elements --
+local E = {}
+
+-- x, y, w, h, align, title, invisible, action(), font, cursor, hint
+E.button = {features = {x = 0, y = 0, title = "", invisible = false, font = menu_font, cursor = "hand", can_focus = true,
+	
+	draw = function(self)
+		if not self.enabled then return end
+		local x, y = P.getAlignedCoords(self)
+		local is_over = false
+		if love.mouse.getX() > x - self.w/2 and love.mouse.getX() < x + self.w/2 and love.mouse.getY() > y - self.h/2 and love.mouse.getY() < y + self.h/2 then
+			if self.cursor then
+				render_cursor = Cursor[self.cursor]
+			end
+			if self.hint then
+				cursor_hint = self.hint
+			end
+			is_over = true
+		elseif keyboard_focus == self then
+			is_over = true
+		end
+		if is_over then
+			love.graphics.setColor(0.6, 0.6, 0.6)
+		else
+			love.graphics.setColor(0.8, 0.8, 0.8)
+		end
+		love.graphics.rectangle("fill", x - self.w/2, y - self.h/2, self.w, self.h)
+		love.graphics.setColor(0, 0, 0)
+		love.graphics.setFont(self.font)
+		love.graphics.print(self.title, x - self.font:getWidth(self.title)/2, y - self.font:getHeight()/2)
+	end,
+	
+	mouseEvent = function(self, args)
+		if not self.enabled then return end
+		if self.parent.tick ~= 1 then return end
+		if args.button ~= 1 then return end
+		local x, y = P.getAlignedCoords(self)
+		if args.x > x - self.w/2 and args.x < x + self.w/2 and args.y > y - self.h/2 and args.y < y + self.h/2 then
+			if args.isDown then
+				pressing = self
+				Sound.press:stop()
+				Sound.press:play()
+			elseif pressing == self then
+				if self.action then
+					self:action()
+				end
+				Sound.release:stop()
+				Sound.release:play()
+			end
+			return true
+		end
+	end,
+},
+	create = function(self)
+		self.w = self.w or self.font:getWidth(self.title) + 10
+		self.h = self.h or self.font:getHeight() + 10
+	end
+}
+
+-- x, y, w, h, align, text, onClick(), font, cursor, hint
+E.label = {features = {x = 0, y = 0, text = "", font = menu_font,
+	
+	draw = function(self)
+		if not self.enabled then return end
+		local x, y = P.getAlignedCoords(self)
+		if self.onClick and love.mouse.getX() > x - self.w/2 and love.mouse.getX() < x + self.w/2 and love.mouse.getY() > y - self.h/2 and love.mouse.getY() < y + self.h/2 then
+			love.graphics.setColor(0.8, 0.8, 0.8)
+			if self.cursor then
+				render_cursor = Cursor[self.cursor]
+			end
+			if self.hint then
+				cursor_hint = self.hint
+			end
+		else
+			love.graphics.setColor(1, 1, 1)
+		end
+		love.graphics.setFont(self.font)
+		love.graphics.print(self.text, x - self.w/2, y - self.font:getHeight()/2)
+	end,
+	
+	mouseEvent = function(self, args)
+		if not self.enabled then return end
+		if not self.onClick then return end
+		if self.parent.tick ~= 1 then return end
+		if args.button ~= 1 then return end
+		local x, y = P.getAlignedCoords(self)
+		if args.x > x - self.w/2 and args.x < x + self.w/2 and args.y > y - self.h/2 and args.y < y + self.h/2 then
+			if args.isDown then
+				pressing = self
+				Sound.press:stop()
+				Sound.press:play()
+			elseif pressing == self then
+				if self.onClick then
+					self:onClick()
+				end
+				Sound.release:stop()
+				Sound.release:play()
+			end
+			return true
+		end
+	end,
+},
+create = function(self)
+	self.w = self.w or self.font:getWidth(self.text)
+	self.h = self.h or self.font:getHeight()
+end
+}
+
+
+-- x, y, w, h, align, value, caret_pos, bg_text, font, cursor, hint
+E.text = {features = {x = 0, y = 0, value = "", caret_pos = 0, font = menu_font, w = 0, cursor = "ibeam", tick = 0, can_focus = true,
+	
+	draw = function(self)
+		if not self.enabled then return end
+		local x, y = P.getAlignedCoords(self)
+		if love.mouse.getX() > x - self.w/2 and love.mouse.getX() < x + self.w/2 and love.mouse.getY() > y - self.h/2 and love.mouse.getY() < y + self.h/2 then
+			if self.cursor then
+				render_cursor = Cursor[self.cursor]
+			end
+			if self.hint then
+				cursor_hint = self.hint
+			end
+		end
+		love.graphics.setColor(1, 1, 1)
+		love.graphics.rectangle("fill", x - self.w/2, y - self.h/2, self.w, self.h)
+		love.graphics.setColor(0, 0, 0)
+		love.graphics.rectangle("line", x - self.w/2, y - self.h/2, self.w, self.h)
+		love.graphics.setFont(self.font)
+		love.graphics.setColor(0, 0, 0)
+		love.graphics.print(self.value, x - self.w/2 + 5, y - self.font:getHeight()/2)
+		if self.bg_text and #self.value == 0 and keyboard_focus ~= self then
+			love.graphics.setColor(0.5, 0.5, 0.5)
+			love.graphics.print(self.bg_text, x - self.w/2 + 5, y - self.font:getHeight()/2)
+		end
+		if keyboard_focus == self and self.tick < 1/2 then
+			local c = x - self.w/2 + self.font:getWidth(string.sub(self.value, 1, self.caret_pos)) + 5
+			love.graphics.line(c, y - self.h/2, c, y + self.h/2)
+		end
+	end,
+	
+	mouseEvent = function(self, args)
+		if not self.enabled then return end
+		if self.parent.tick ~= 1 then return end
+		if args.button ~= 1 then return end
+		local x, y = P.getAlignedCoords(self)
+		if args.isDown and args.x > x - self.w/2 and args.x < x + self.w/2 and args.y > y - self.h/2 and args.y < y + self.h/2 then
+			keyboard_focus = self
+			self.tick = 0
+			self.caret_pos = #self.value
+			for f = 1, #self.value do
+				if args.x < x - self.w/2 + self.font:getWidth(string.sub(self.value, 1, f)) - self.font:getWidth(string.sub(self.value, f, f))/2 + 5 then
+					self.caret_pos = f - 1
+					break
+				end
+			end
+			return true
+		end
+	end,
+	
+	keyPressed = function(self, key)
+		if self.parent.tick ~= 1 then return end
+		if key == "backspace" then
+			if self.caret_pos > 0 then
+				self.value = string.sub(self.value, 1, self.caret_pos - 1) .. string.sub(self.value, self.caret_pos + 1, #self.value)
+				self.caret_pos = self.caret_pos - 1
+				self.tick = 0
+			end
+		elseif key == "delete" then
+			if self.caret_pos < #self.value then
+				self.value = string.sub(self.value, 1, self.caret_pos) .. string.sub(self.value, self.caret_pos + 2, #self.value)
+				self.tick = 0
+			end
+		elseif key == "left" then
+			self.caret_pos = math.max(self.caret_pos - 1, 0)
+			self.tick = 0
+		elseif key == "right" then
+			self.caret_pos = math.min(self.caret_pos + 1, #self.value)
+			self.tick = 0
+		end
+	end,
+	
+	textInput = function(self, text)
+		if self.parent.tick ~= 1 then return end
+		if self.font:getWidth(self.value .. text) <= self.w - 10 then
+			self.value = string.sub(self.value, 1, self.caret_pos) .. text .. string.sub(self.value, self.caret_pos + 1, #self.value)
+			self.caret_pos = self.caret_pos + #text
+		end
+	end,
+},
+create = function(self)
+	self.h = self.h or self.font:getHeight() + 10
+end
+}
+
+-- x, y, w, h, align, text, value, box_w, label_side, value_changed(), font, cursor, hint
+E.toggle = {features = {x = 0, y = 0, value = false, text = "", font = menu_font, cursor = "hand", box_w = 20, label_side = "right", can_focus = true,
+	
+	draw = function(self)
+		if not self.enabled then return end
+		local x, y = P.getAlignedCoords(self)
+		local is_over = false
+		if love.mouse.getY() > y - self.h/2 and love.mouse.getY() < y + self.h/2 then
+			if (self.label_side == "right" and love.mouse.getX() > x - self.w/2 and love.mouse.getX() < x + self.w/2 + 5 + self.font:getWidth(self.text))
+			or (self.label_side == "left" and love.mouse.getX() > x - self.w/2 - 5 - self.font:getWidth(self.text) and love.mouse.getX() < x + self.w/2) then
+				if self.cursor then
+					render_cursor = Cursor[self.cursor]
+				end
+				if self.hint then
+					cursor_hint = self.hint
+				end
+				is_over = true
+			end
+		elseif keyboard_focus == self then
+			is_over = true
+		end
+		love.graphics.setColor(1, 1, 1)
+		love.graphics.setFont(self.font)
+		if self.text then
+			if self.label_side == "right" then
+				love.graphics.print(self.text, x + self.w/2 + 5, y - self.font:getHeight()/2)
+			elseif self.label_side == "left" then
+				love.graphics.print(self.text, x - self.w/2 - self.font:getWidth(self.text) - 5, y - self.font:getHeight()/2)
+			end
+		end
+		if is_over then
+			love.graphics.setColor(0.8, 0.8, 0.8)
+		else
+			love.graphics.setColor(1, 1, 1)
+		end
+		love.graphics.rectangle("fill", x - self.w/2, y - self.box_w/2, self.box_w, self.box_w)
+		love.graphics.setColor(0, 0, 0)
+		love.graphics.rectangle("line", x - self.w/2, y - self.box_w/2, self.box_w, self.box_w)
+		if self.value then
+			love.graphics.setColor(0, 0, 0)
+			-- love.graphics.rectangle("fill", x - self.w/2 + 3, y - self.box_w/2 + 3, self.box_w - 6, self.box_w - 6)
+			love.graphics.draw(Img.ui.toggle_check, x - self.w/2, y - self.box_w/2)
+		end
+	end,
+	
+	mouseEvent = function(self, args)
+		if not self.enabled then return end
+		if self.parent.tick ~= 1 then return end
+		if args.button ~= 1 then return end
+		local x, y = P.getAlignedCoords(self)
+		if args.y > y - self.h/2 and args.y < y + self.h/2 then
+			if (self.label_side == "right" and args.x > x - self.w/2 and args.x < x + self.w/2 + 5 + self.font:getWidth(self.text))
+			or (self.label_side == "left" and args.x > x - self.w/2 - 5 - self.font:getWidth(self.text) and args.x < x + self.w/2) then
+				if args.isDown then
+					pressing = self
+					Sound.press:stop()
+					Sound.press:play()
+				elseif pressing == self then
+					self.value = not self.value
+					if self.value_changed then
+						self:value_changed()
+					end
+					Sound.release:stop()
+					Sound.release:play()
+				end
+				return true
+			end
+		end
+	end,
+},
+create = function(self)
+	self.w = self.w or self.box_w
+	self.h = self.h or math.max(self.box_w, self.font:getHeight())
+end
+}
+
+-- x, y, w, h, align, value, handle_w, bar_h, valueChanged(), action(), cursor, hint
+E.slider = {features = {x = 0, y = 0, value = 0, w = 0, h = 20, handle_w = 7, bar_h = 5, cursor = "hand", can_focus = true,
+	
+	draw = function(self)
+		if not self.enabled then return end
+		local x, y = P.getAlignedCoords(self)
+		local is_over = false
+		if love.mouse.getX() > x - self.w/2 and love.mouse.getX() < x + self.w/2 and love.mouse.getY() > y - self.h/2 and love.mouse.getY() < y + self.h/2 then
+			if self.cursor then
+				render_cursor = Cursor[self.cursor]
+			end
+			if self.hint then
+				cursor_hint = self.hint
+			end
+			is_over = true
+		elseif keyboard_focus == self then
+			is_over = true
+		end
+		if pressing == self and self.hint then
+			cursor_hint = self.hint
+		end
+		love.graphics.setColor(1, 1, 1)
+		love.graphics.rectangle("fill", x - self.w/2, y - self.bar_h/2, self.w, self.bar_h)
+		love.graphics.setColor(0, 0, 0)
+		love.graphics.rectangle("line", x - self.w/2, y - self.bar_h/2, self.w, self.bar_h)
+		if is_over then
+			if pressing == self then
+				love.graphics.setColor(0.4, 0.4, 0.4)
+			else
+				love.graphics.setColor(0.6, 0.6, 0.6)
+			end
+		else
+			love.graphics.setColor(0.8, 0.8, 0.8)
+		end
+		love.graphics.rectangle("fill", x - self.w/2 + self.value * self.w - self.handle_w/2, y - self.h/2, self.handle_w, self.h)
+		love.graphics.setColor(0, 0, 0)
+		love.graphics.rectangle("line", x - self.w/2 + self.value * self.w - self.handle_w/2, y - self.h/2, self.handle_w, self.h)
+	end,
+	
+	mouseEvent = function(self, args)
+		if not self.enabled then return end
+		if self.parent.tick ~= 1 then return end
+		if args.button ~= 1 then return end
+		local x, y = P.getAlignedCoords(self)
+		if args.isDown then
+			if args.x > x - self.w/2 and args.x < x + self.w/2 and args.y > y - self.h/2 and args.y < y + self.h/2 then
+				pressing = self
+				self.value = math.min(math.max((args.x - x) / self.w + 1/2, 0), 1)
+				Sound.press:stop()
+				Sound.press:play()
+				return true
+			end
+		elseif pressing == self then
+			if self.valueChanged then
+				self:valueChanged()
+			end
+			if self.action then
+				self:action()
+			end
+			Sound.release:stop()
+			Sound.release:play()
+			return true
+		end
+	end,
+	
+	update = function(self)
+		local x, y = P.getAlignedCoords(self)
+		self.value = math.min(math.max((love.mouse.getX() - x) / self.w + 1/2, 0), 1)
+		if self.valueChanged then
+			self:valueChanged()
+		end
+	end,
+}}
+
+-- UI Containers --
+
+local views = {}
+-- x, y, w, h, tick, open_time, close_time, executeAll(), close(), open(), toggle(), updateSize(), can_navigate
+E.view = {features = {enabled = false, x = 0, y = 0, w = 0, h = 0, tick = 0, open_time = 1, close_time = 1, can_navigate = true,
+	
+	executeAll = function(self, func, args)
+		-- if not self.enabled then return end
+		for index, this in ipairs(self) do
+			if type(func) == "string" and type(this[func]) == "function" then
+				local result = this[func](this, args)
+				if result then return result end
+			elseif type(func) == "function" then
+				local result = func(this)
+				if result then return result end
+			end
+		end
+	end,
+	
+	open = function(self)
+		self.enabled = true
+		if self.open_time == 0 then
+			self.tick = 1
+		end
+	end,
+	
+	close = function(self)
+		self.enabled = false
+		if keyboard_focus and self:executeAll(function(self) if keyboard_focus == self then return true end end) then
+			keyboard_focus = nil
+		end
+		if pressing and self:executeAll(function(self) if pressing == self then return true end end) then
+			pressing = nil
+		end
+		if self.close_time == 0 then
+			self.tick = 0
+		end
+	end,
+	
+	toggle = function(self)
+		if self.enabled then
+			self:close()
+		else
+			self:open()
+		end
+	end,
+},
+	create = function(self)
+		table.insert(views, self)
+		for index, this in ipairs(self) do
+			this.parent = self
+		end
+		if self.updateSize then
+			self:updateSize()
+		end
+		self:executeAll("updateSize")
+	end
+}
+
+function P.purgeViews()
+	views = {}
+end
+
+-- Finalize Objects --
+for index, this in pairs(E) do
+	P[index] = function(args)
+		local self = {enabled = true, ui_type = index}
+		for arg_index, this_arg in pairs(E[index].features) do
+			self[arg_index] = this_arg
+		end
+		for arg_index, this_arg in pairs(args) do
+			self[arg_index] = this_arg
+		end
+		if this.create then
+			this.create(self)
+		end
+		return self
+	end
+end
+
+
 
 -- Built In Functions
 
-function load()
+function P.load()
 	
-	show_chat = false
-	show_profile_settings = true
-	
-	caret_tick = 0
-	caret_show = true
-	scroll = 0
-	max_scroll = 0
-	type_tick = 0
-	type_prog = 0
-	backspacing = false
-	auto_scrolling = false
-	type_sound_tick = 0
-	selected_reply = 1
-	typed_reply = nil
-	title_text = nil
-	title_sub_text = nil
-	title_tick = Title_time
-	
-	username = ""
-	selected_story = "test_horror"
+	DrawAdd(P, "ui", 10000001)
 	
 end
 
-function draw()
 
+function P.draw()
+	
 	love.graphics.origin()
-	love.graphics.setColor(60/255, 60/255, 60/255)
-	love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
-	-- love.graphics.translate(getCamX(), getCamY())
-	love.graphics.scale(Scale)
+	-- love.graphics.scale(L.settings.scale)
 	
-	love.graphics.setFont(Main_font)
 	
-	love.mouse.setCursor(Cursor.arrow)
-	mx = (love.mouse.getX() - getCamX()) / Scale
-	my = (love.mouse.getY() - getCamY()) / Scale
-	
-	-- Friends List --
+	for index, this in ipairs(views) do
 		
-	love.graphics.setColor(50/255, 50/255, 50/255)
-	love.graphics.rectangle("fill", 0, 0, Friend_list_w, getResY())
-	
-	love.graphics.setColor(1, 1, 1)
-	printF("Friends", Padding, Padding)
-	
-	-- Chat --
-	if show_chat then
-		
-		local y = 0
-		local last_user
-		for index_msg, this_msg in pairs (L.story.chat_log) do
-			
-			if last_user ~= this_msg.user then
-				
-				y = y + 1
-				
-				if this_msg.user then
-					love.graphics.setColor(1, 1, 1)
-					local pp
-					if this_msg.user.pic then
-						pp = this_msg.user.pic
-					else
-						pp = Img.ui.default_profile
-					end
-					love.graphics.draw(pp, Friend_list_w + Padding, y * Text_spacing + scroll + Padding - Font_size/2, 0, Profile_size / pp:getWidth(), Profile_size / pp:getHeight(), 0, 0)
-					
-					love.graphics.setColor(60/255, 60/255, 60/255)
-					love.graphics.draw(Img.ui.profile_border, Friend_list_w + Padding, y * Text_spacing + scroll + Padding - Font_size/2, 0, Profile_size / Img.ui.profile_border:getWidth(), Profile_size / Img.ui.profile_border:getHeight(), 0, 0)
-					
-					love.graphics.setColor(1, 1, 1)
-					printF(this_msg.user.name, Friend_list_w + Padding*3/2 + Profile_size, y * Text_spacing + scroll + Padding)
-				end
-				
-				y = y + 1
-				
-			end
-			
-			local x = 0
-			if this_msg.text then
-				love.graphics.setColor(1, 1, 1)
-				for index_word, this_word in pairs (this_msg.text) do
-					
-					if x + Main_font:getWidth(this_word)/Scale > getResX() - Friend_list_w - Padding*5/2 - Profile_size then
-						y = y + 1
-						x = 0
-					end
-					printF(this_word, Friend_list_w + Padding*3/2 + Profile_size + x, y * Text_spacing + scroll + Padding)
-					x = x + Main_font:getWidth(this_word.." ")/Scale
-					
-				end
-				
-				y = y + 1
-			end
-			
-			if this_msg.img then
-				
-				love.graphics.draw(this_msg.img, Friend_list_w + Padding*3/2 + Profile_size, y * Text_spacing + scroll + Padding)
-				y = y + math.ceil(this_msg.img:getHeight() / Text_spacing) + 1
-				
-			end
-			
-			last_user = this_msg.user
-			
+		if this.tick > 0 then
+			this:executeAll("draw")
 		end
 		
-		-- reply box --
-		love.graphics.setColor(60/255, 60/255, 60/255)
-		love.graphics.rectangle("fill", Friend_list_w, getResY() - Reply_box_h - Padding, getResX() - Friend_list_w, Reply_box_h + Padding)
-		love.graphics.setColor(70/255, 70/255, 70/255)
-		love.graphics.rectangle("fill", Friend_list_w + Padding, getResY() - Padding - Reply_box_h, getResX() - Friend_list_w - Padding*2, Reply_box_h, 5)
+	end
+	
+	
+	-- Cursor Hint --
+	love.graphics.origin()
+	if cursor_hint and love.window.hasMouseFocus() then
+		love.graphics.setFont(menu_font)
+		if love.mouse.getX() < menu_font:getWidth(cursor_hint) + 15 then
+			love.graphics.setColor(0, 0, 0, 0.5)
+			love.graphics.rectangle("fill", love.mouse.getX() + 30 - 5, love.mouse.getY() + 10 - 5, menu_font:getWidth(cursor_hint) + 10, menu_font:getHeight() + 10)
+			love.graphics.setColor(1, 1, 1)
+			love.graphics.print(cursor_hint, love.mouse.getX() + 30, love.mouse.getY() + 10)
+		else
+			love.graphics.setColor(0, 0, 0, 0.5)
+			love.graphics.rectangle("fill", love.mouse.getX() - menu_font:getWidth(cursor_hint) - 10 - 5, love.mouse.getY() + 10 - 5, menu_font:getWidth(cursor_hint) + 10, menu_font:getHeight() + 10)
+			love.graphics.setColor(1, 1, 1)
+			love.graphics.print(cursor_hint, love.mouse.getX() - menu_font:getWidth(cursor_hint) - 10, love.mouse.getY() + 10)
+		end
+	end
+	-- Custom Cursor --
+	if love.mouse.isCursorSupported() and love.mouse.getCursor() ~= render_cursor then
+		love.mouse.setCursor(render_cursor)
+	end
+	-- Reset --
+	render_cursor = Default_cursor
+	cursor_hint = nil
+	
+end
+
+
+function P.update(dt)
+	
+	if keyboard_focus and keyboard_focus.tick then
+		keyboard_focus.tick = keyboard_focus.tick + dt
+		if keyboard_focus.tick > 1 then
+			keyboard_focus.tick = keyboard_focus.tick - 1
+		end
+	end
+	
+	if pressing and pressing.ui_type == "slider" and pressing.update then
+		pressing:update()
+	end
+	
+	for index, this in ipairs(views) do
+		if this.enabled and this.open_time > 0 then
+			this.tick = math.min(this.tick + dt / this.open_time, 1)
+		elseif not this.enabled and this.close_time > 0 then
+			this.tick = math.max(this.tick - dt / this.close_time, 0)
+		end
+	end
+	
+end
+
+
+function P.mousepressed(mx, my, button)
+	
+	keyboard_focus = nil
+	
+	for index, this in ipairs(views) do
+		if this:executeAll("mouseEvent", {isDown = true, x = mx, y = my, button = button}) then return true end
+	end
+	
+end
+
+function P.mousereleased(mx, my, button)
+	
+	for index, this in ipairs(views) do
+		if this:executeAll("mouseEvent", {isDown = false, x = mx, y = my, button = button}) then break end
+	end
+	
+	if button == 1 then
+		pressing = nil
+	end
+	
+end
+
+function P.keypressed(key)
+	
+	if keyboard_focus then
+		love.keyboard.setKeyRepeat(true)
 		
-		love.graphics.setColor(1, 1, 1)
-		
-		if L.story.replies then -- Show reply options --
+		if keyboard_focus.parent.can_navigate and (key == "up" or key == "down" or key == "tab") then
 			
-			if not typed_reply then
-				if L.story.question then
-					printF(L.story.question, Friend_list_w + Padding*3/2, getResY() - Padding - Reply_box_h/2)
-					x = Main_font:getWidth(L.story.question)/Scale + Padding
+			local here
+			for index, this in ipairs(keyboard_focus.parent) do
+				if this == keyboard_focus then
+					here = index
+					break
+				end
+			end
+			
+			while true do
+				if key == "up" or (key == "tab" and (love.keyboard.isDown("lshift") or love.keyboard.isDown("rshift"))) then
+					here = here - 1
 				else
-					x = 0
+					here = here + 1
 				end
-				
-				for index, this in pairs (L.story.replies) do
-					
-					-- hand cursor
-					if isWithin(mx, my, Friend_list_w + Padding*2 + x, getResY() - Padding - Reply_box_h/2 - Font_size/2, Main_font:getWidth(this.short)/Scale, Font_size) then
-						love.mouse.setCursor(Cursor.hand)
-						selected_reply = index
-					end
-					
-					-- selected reply underline
-					if selected_reply == index then
-						love.graphics.line(Friend_list_w + Padding*2 + x, getResY() - Padding - Reply_box_h/2 + Font_size * Scale / 2, Friend_list_w + Padding*2 + x + Main_font:getWidth(this.short) / Scale, getResY() - Padding - Reply_box_h/2 + Font_size * Scale / 2)
-					end
-					
-					printF(this.short, Friend_list_w + Padding*2 + x, getResY() - Padding - Reply_box_h/2)
-					
-					x = x + Main_font:getWidth(this.short)/Scale + Padding
-					
+				if not keyboard_focus.parent[here] then
+					break
 				end
-				
-			else -- Show typed text --
-				
-				printF(string.sub(L.story.replies[typed_reply].long, 1, type_prog), Friend_list_w + Padding*3/2, getResY() - Padding - Reply_box_h/2)
-				
-				-- send button --
-				if isWithin(mx, my, getResX() - Padding*3/2 - Img.ui.send:getWidth(), getResY() - Padding - Reply_box_h/2 - Img.ui.send:getHeight()/2, Img.ui.send:getWidth(), Img.ui.send:getHeight()) then
-					love.mouse.setCursor(Cursor.hand)
-					love.graphics.setColor(0, 0, 0, 0.1)
-					love.graphics.rectangle("fill", getResX() - Padding*3/2 - Img.ui.send:getWidth(), getResY() - Padding - Reply_box_h/2 - Img.ui.send:getHeight()/2, Img.ui.send:getWidth(), Img.ui.send:getHeight())
+				if keyboard_focus.parent[here].can_focus then
+					keyboard_focus = keyboard_focus.parent[here]
+					break
 				end
-				love.graphics.setColor(1, 1, 1, 0.7)
-				love.graphics.draw(Img.ui.send, getResX() - Padding*3/2 - Img.ui.send:getWidth(), getResY() - Padding - Reply_box_h/2 - Img.ui.send:getHeight()/2)
-				
-				-- backspace button --
-				if isWithin(mx, my, getResX() - Padding*2 - Img.ui.backspace:getWidth() - Img.ui.x:getWidth(), getResY() - Padding - Reply_box_h/2 - Img.ui.backspace:getHeight()/2, Img.ui.backspace:getWidth(), Img.ui.backspace:getHeight()) then
-					love.mouse.setCursor(Cursor.hand)
-					love.graphics.setColor(0, 0, 0, 0.1)
-					love.graphics.rectangle("fill", getResX() - Padding*2 - Img.ui.backspace:getWidth() - Img.ui.x:getWidth(), getResY() - Padding - Reply_box_h/2 - Img.ui.backspace:getHeight()/2, Img.ui.backspace:getWidth(), Img.ui.backspace:getHeight())
-				end
-				love.graphics.setColor(1, 1, 1, 0.7)
-				love.graphics.draw(Img.ui.backspace, getResX() - Padding*2 - Img.ui.backspace:getWidth() - Img.ui.x:getWidth(), getResY() - Padding - Reply_box_h/2 - Img.ui.backspace:getHeight()/2)
-				
 			end
 			
-		end
-		
-		-- typing --
-		if L.story.is_typing then
-			love.graphics.setColor(1, 1, 1, 0.8)
-			printF(L.story.is_typing.name.." is typing...", Friend_list_w + Padding, getResY() - Padding/2)
-		end
-		
-		-- scroll bar --
-		if max_scroll < 0 then
-			love.graphics.setColor(50/255, 50/255, 50/255)
-			h = (getResY() - Reply_box_h - Padding - Scroll_bar_h) * (scroll / max_scroll)
-			love.graphics.rectangle("fill", getResX() - 15, h, 10, Scroll_bar_h)
-		end
-		
-	end
-	
-	if show_profile_settings then
-		
-		love.graphics.setColor(40/255, 40/255, 40/255)
-		
-		love.graphics.rectangle("fill", getResX()/2 - Profile_settings_w/2, getResY()/2 - Profile_settings_h/2, Profile_settings_w, Profile_settings_h, 5)
-		
-		-- profile pic
-		if profile_pic then
-			love.graphics.setColor(1, 1, 1)
-			love.graphics.draw(profile_pic, getResX()/2 - Profile_settings_w/2 + 25, getResY()/2 - 100/2, 0, 100 / profile_pic:getWidth(), 100 / profile_pic:getHeight())
-		else
-			love.graphics.setColor(60/255, 60/255, 60/255)
-			love.graphics.rectangle("fill", getResX()/2 - Profile_settings_w/2 + 25, getResY()/2 - 100/2, 100, 100)
-			love.graphics.setColor(40/255, 40/255, 40/255)
-			love.graphics.draw(Img.ui.default_profile, getResX()/2 - Profile_settings_w/2 + 25, getResY()/2 - 100/2)
-			love.graphics.setColor(1, 1, 1)
-			love.graphics.setFont(Main_font)
-			love.graphics.printf("Drag an image file here if you want", getResX()/2 - Profile_settings_w/2 + 25, getResY()/2 - 100/2, 100, "center")
-		end
-		
-		-- username text box
-		love.graphics.setColor(60/255, 60/255, 60/255)
-		love.graphics.rectangle("fill", getResX()/2 - 50, getResY()/2 - 100/2, Profile_settings_w - 50 - 100 - 25, Font_size*2)
-		
-		if #username > 0 then
-			love.graphics.setColor(1, 1, 1)
-			printF(username, getResX()/2 - 50 + 10, getResY()/2 - 100/2 + Font_size)
-		else
-			love.graphics.setColor(1, 1, 1, 0.7)
-			printF("username", getResX()/2 - 50 + 10, getResY()/2 - 100/2 + Font_size)
-		end
-		if caret_show then
-			love.graphics.rectangle("fill", getResX()/2 - 50 + 11 + Main_font:getWidth(username) / Scale, getResY()/2 - 100/2 + Font_size/2, 1, Font_size)
-		end
-		
-		-- start button
-		love.graphics.setColor(60/255, 60/255, 60/255)
-		love.graphics.rectangle("fill", getResX()/2 + Profile_settings_w/2 - 100 - 25, getResY()/2 + Profile_settings_h/2 - 30 - 25, 100, 30)
-		if mx > getResX()/2 + Profile_settings_w/2 - 100 - 25 and mx < getResX()/2 + Profile_settings_w/2 - 100 - 25 + 100 and my > getResY()/2 + Profile_settings_h/2 - 30 - 25 and my < getResY()/2 + Profile_settings_h/2 - 30 - 25 + 30 then
-			love.graphics.setColor(1, 1, 1)
-		else
-			love.graphics.setColor(1, 1, 1, 0.7)
-		end
-		printF("Play", getResX()/2 + Profile_settings_w/2 - 100/2 - 25 - Main_font:getWidth("Play")/2/Scale, getResY()/2 + Profile_settings_h/2 - 30/2 - 25)
-		
-	end
-	
-	-- Title Card --
-	if title_tick < Title_time then
-		
-		love.graphics.setColor(0, 0, 0, math.min((Title_time - title_tick)*3 / Title_time, 1))
-		love.graphics.rectangle("fill", 0, 0, getResX(), getResY())
-		
-		love.graphics.setColor(1, 1, 1, math.min((Title_time - title_tick)*3 / Title_time, 1))
-		love.graphics.setFont(Title_font)
-		
-		if title_text then
-			love.graphics.print(title_text, getResX()/2 - Title_font:getWidth(title_text)/2, getResY()/2 - Title_font_size/2)
-		end
-		
-		if title_sub_text then
-			love.graphics.printf(title_sub_text, 0, getResY()/2 + Title_font_size/2 * 2, getResX() * 2, "center", 0, 0.5, 0.5)
-		end
-		
-	end
-	
-end
-
-function update(dt)
-	
-	-- Caret --
-	caret_tick = caret_tick + dt
-	if caret_tick > Caret_speed then
-		caret_tick = caret_tick - Caret_speed
-		caret_show = not caret_show
-	end
-	
-	-- Title Card --
-	if title_tick < Title_time then
-		title_tick = title_tick + dt
-		
-		if title_tick >= Title_time then
-			L.story.next()
-		end
-	end
-	
-	if show_chat then
-		
-		if typed_reply then
-			type_tick = type_tick + dt * Type_speed
-			if type_tick >= 1 then
-				
-				type_tick = type_tick - 1
-				
-				if not backspacing then
-					
-					if type_prog < #L.story.replies[typed_reply].long then
-						
-						type_prog = math.min(type_prog + 1, #L.story.replies[typed_reply].long)
-						
-						type_sound_tick = type_sound_tick - dt
-						if type_sound_tick <= 0 then
-							type_sound_tick = math.random(1, 10) / 150
-							playKeyboardSound()
-						end
-						
-					end
-					
-				else
-					
-					
-					if type_prog > 0 then
-						type_prog = math.max(type_prog - 1, 0)
-					else
-						typed_reply = nil
-						Sound.key_release:stop()
-						Sound.key_release:play()
-					end
-					
-				end
-				
-			end
-		end
-		
-		if auto_scrolling then
-			
-			if scroll == max_scroll then
-				auto_scrolling = false
-			else
-				scroll = math.max(scroll - dt * Auto_scroll_speed, max_scroll)
-			end
-			
-		end
-		
-	end
-	
-end
-
--- Calc Functions --
-Calc = {}
-
-function Calc.max_scroll()
-	
-	local y = 0
-	local last_user
-	for index_msg, this_msg in pairs (L.story.chat_log) do
-		
-		if last_user ~= this_msg.user then
-			
-			y = y + 1
-			
-			y = y + 1
-			
-		end
-		
-		local x = 0
-		if this_msg.text then
-			for index_word, this_word in pairs (this_msg.text) do
-				
-				if x + Main_font:getWidth(this_word)/Scale > getResX() - Friend_list_w - Padding*5/2 - Profile_size then
-					y = y + 1
-					x = 0
-				end
-				x = x + Main_font:getWidth(this_word.." ")/Scale
-				
-			end
-			
-			y = y + 1
-		end
-		
-		if this_msg.img then
-			
-			y = y + math.ceil(this_msg.img:getHeight() / Text_spacing) + 1
-			
-		end
-		
-		last_user = this_msg.user
-		
-	end
-	
-	max_scroll = -y * Text_spacing + getResY() - Reply_box_h - Padding*2
-	
-end
-
-
--- Input Functions --
-
-function mousepressed(mx_true, my_true, button)
-	
-	local mx = (mx_true - getCamX()) / Scale
-	local my = (my_true - getCamY()) / Scale
-	
-	if show_profile_settings then
-		
-		if mx > getResX()/2 + Profile_settings_w/2 - 100 - 25 and mx < getResX()/2 + Profile_settings_w/2 - 100 - 25 + 100 and my > getResY()/2 + Profile_settings_h/2 - 30 - 25 and my < getResY()/2 + Profile_settings_h/2 - 30 - 25 + 30 then
-			
-			L.story.loadStory(selected_story, username, profile_pic)
-			
-			show_profile_settings = false
-			show_chat = true
-			
+		elseif keyboard_focus.keyPressed then
+			keyboard_focus:keyPressed(key)
 		end
 		
 		return true
 		
-	end
-	
-	if show_chat then
-		
-		if button == 1 then
-			
-			-- friends list --
-			-- if mx > Padding/2 and mx < Friend_list_w then
-			-- 	local y = 0
-			-- 	for index, this in pairs (L.story.chats) do
-			-- 		if this.visible then
-			-- 			y = y + 1
-			-- 			if my >= (y-1) * 50 - 25 + Padding*3 and my < (y-1) * 50 + 25 + Padding*3 then
-			-- 				chat_open = index
-			-- 				Calc.max_scroll()
-			-- 				scroll = max_scroll
-							
-			-- 				return true
-			-- 			end
-			-- 		end
-			-- 	end
-			-- end
-			
-			if L.story.replies then
-				
-				if not typed_reply then
-					
-					-- reply box --
-					local x
-					if L.story.question then
-						x = Main_font:getWidth(L.story.question)/Scale + Padding
-					else
-						x = 0
-					end
-					for index, this in pairs (L.story.replies) do
-						
-						if isWithin(mx, my, Friend_list_w + Padding*2 + x, getResY() - Padding - Reply_box_h/2 - Font_size/2, Main_font:getWidth(this.short)/Scale, Font_size) then
-							
-							selectReply(index)
-							
-							return true
-							
-						end
-						x = x + Main_font:getWidth(this.short)/Scale + Padding
-						
-					end
-				
-				else
-					
-					-- send button --
-					if isWithin(mx, my, getResX() - Padding*3/2 - Img.ui.send:getWidth(), getResY() - Padding - Reply_box_h/2 - Img.ui.send:getHeight()/2, Img.ui.send:getWidth(), Img.ui.send:getHeight()) then
-						
-						sendReply()
-						
-						return true
-						
-					end
-					
-					-- delete msg button --
-					if isWithin(mx, my, getResX() - Padding*2 - Img.ui.send:getWidth() - Img.ui.x:getWidth(), getResY() - Padding - Reply_box_h/2 - Img.ui.send:getHeight()/2, Img.ui.send:getWidth(), Img.ui.send:getHeight()) then
-						
-						backspaceReply()
-						
-						return true
-						
-					end
-					
-				end
-				
-				
-			end
-			
-		end
-		
+	else
+		love.keyboard.setKeyRepeat(false)
 	end
 	
 end
 
--- function mousereleased(mx_true, my_true, button)
-	
-	-- mx = (mx_true - getCamX()) / Scale
-	-- my = (my_true - getCamY()) / Scale
-	
-	-- if button == 1 then
-		
-		
-		
-	-- end
+-- function P.keyreleased(key)
 	
 -- end
 
-
-function wheelmoved(x, y)
+function P.textinput(text)
 	
-	if show_chat then
-		
-		Calc.max_scroll()
-		scroll = math.max(math.min(scroll + y * 30, 0), max_scroll)
-		
+	if keyboard_focus and keyboard_focus.textInput then
+		keyboard_focus:textInput(text)
 	end
 	
 end
 
-
-function resize(w, h)
+function P.resize(window_w, window_h)
 	
-	if show_chat then
-		
-		if scroll == max_scroll then
-			Calc.max_scroll()
-			scroll = max_scroll
-		else
-			Calc.max_scroll()
-			scroll = math.max(math.min(scroll, 0), max_scroll)
+	for index, this in ipairs(views) do
+		if this.updateSize then
+			this:updateSize()
 		end
-		
-	end
-	
-	
-end
-
-
-function keypressed(key)
-	
-	if show_profile_settings then
-		
-		love.keyboard.setKeyRepeat(true)
-		
-		if key == "backspace" then
-			username = string.sub(username, 1, #username - 1)
-		elseif key == "return" then
-			L.story.loadStory(selected_story, username, profile_pic)
-			
-			show_profile_settings = false
-			show_chat = true
-		end
-		
-		return true
-		
-	end
-	
-	if show_chat then
-		
-		--DEBUG
-		if key == "space" then
-			L.story.next()
-		end
-		
-		love.keyboard.setKeyRepeat(false)
-		
-		if L.story.replies then
-			
-			if not typed_reply then
-				
-				-- reply choices --
-				if key == L.settings.key_ui_right then
-					if selected_reply < #L.story.replies then
-						selected_reply = selected_reply + 1
-						playKeyboardSound()
-						return true
-					end
-				elseif key == L.settings.key_ui_left then
-					if selected_reply > 1 then
-						selected_reply = math.max(selected_reply - 1, 1)
-						playKeyboardSound()
-						return true
-					end
-				elseif key == L.settings.key_ui_enter then
-					selectReply(selected_reply)
-					return true
-				end
-				
-			else
-				
-				-- reply preview --
-				if key == L.settings.key_ui_enter then
-					sendReply()
-					return true
-				elseif key == L.settings.key_ui_backspace then
-					backspaceReply()
-					return true
-				end
-				
-			end
-			
-		end
-		
+		this:executeAll("updateSize")
 	end
 	
 end
 
 
-function textinput(text)
-	
-	if show_profile_settings then
-		
-		username = username .. text
-		
-		return true
-		
-	end
-	
-end
+-- Helper Functions --
 
-
-function filedropped(file)
-	
-	local file_name = string.lower(file:getFilename())
-	if string.sub(file_name, #file_name - 3) == ".png" or string.sub(file_name, #file_name - 3) == ".bmp" or string.sub(file_name, #file_name - 3) == ".tga" or string.sub(file_name, #file_name - 3) == ".jpg" or string.sub(file_name, #file_name - 4) == ".jpeg" then
-		profile_pic = love.graphics.newImage(file)
-	end
-	
-end
-
-
--- Common Functions
-
-function selectReply(index)
-	typed_reply = index
-	type_prog = 0
-	type_tick = 0
-	type_sound_tick = 0
-	backspacing = false
-end
-
-function sendReply()
-	
-	local choice = L.story.replies[typed_reply]
-	
-	sendMessage(L.story.me, string.split(choice.long, " "))
-	
-	Sound.key_enter:stop()
-	Sound.key_enter:play()
-	
-	local command = L.story.replies[typed_reply].command
-	
-	selected_reply = 1
-	typed_reply = nil
-	L.story.Command["erase"]()
-	
-	L.story.interpret(command)
-	
-end
-
-function sendMessage(user, msg, img)
-	
-	table.insert(L.story.chat_log, {user = user, text = msg, img = img})
-	-- Calc.max_scroll()
-	
-	if auto_scrolling or scroll == max_scroll then
-		Calc.max_scroll()
-		auto_scrolling = true
+function P.getAlignedCoords(self)
+	if self.align == "right" then
+		return self.parent.x + self.x - self.w/2, self.parent.y + self.y
+	elseif self.align == "left" then
+		return self.parent.x + self.x + self.w/2, self.parent.y + self.y
 	else
-		Calc.max_scroll()
-		scroll = math.max(math.min(scroll, 0), max_scroll)
+		return self.parent.x + self.x, self.parent.y + self.y
 	end
-	
-	if user ~= L.story.me then
-		Sound.chat:stop()
-		Sound.chat:play()
-	end
-	
-end
-
-function backspaceReply()
-	backspacing = true
-	type_tick = -15 -- for keyboard repeat realism
-	type_prog = math.max(type_prog - 1, 0)
-	Sound.key_hold:stop()
-	Sound.key_hold:play()
-end
-
-function playKeyboardSound()
-	
-	local r = math.random(1,3)
-	Sound["key_click_"..r]:stop()
-	Sound["key_click_"..r]:play()
-	
-end
-
-
--- Helper Functions
-
-function getCamX()
-	return 0
-end
-function getCamY()
-	return 0
-end
-function getResX()
-	return love.graphics.getWidth() / Scale
-end
-function getResY()
-	return love.graphics.getHeight() / Scale
-end
-
-function isWithin(xc, yc, x, y, w, h)
-	if xc > x and xc < x + w and yc > y and yc < y + h then
-		return true
-	end
-	return false
-end
-
-function printF(text, x, y)
-	love.graphics.print(text, x, y, 0, 1/Scale, 1/Scale, 0, Main_font:getHeight()/2)
-	-- print(text)
 end
 
 

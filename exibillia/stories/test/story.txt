@@ -1,5 +1,5 @@
 
-title: Test
+title: Test Horror
 author: BlueSheep
 version: 1
 desc: hi
@@ -8,144 +8,210 @@ lang: en
 
 ===
 
-$char | friend | PinkMink | hina.png
-
-//$music|next_colour_planet_remix_loop.wav|5
-//$start_game
+$char | friend | James | james.png
 
 
 #START
-
-// DAY 3
-$cls
-$title| Day 3 | Sample Text
-
-friend: Hey, I just got a pet snake?
-friend: Wanna see?
-
->Sure
-	Sure!
-	->yes
->No
-	No.
-	->no
-=
-
-#no
-friend: Too bad, here he is.
-
-#yes
-friend:|snek.jpg
-friend: Isn't he cute?
-
->Yes
-	Totally!
-	friend: :)
->No
-	Nope.
-	friend: Aw, come on. The devs spent so much time drawing that.
-=
-
+$clear
 
 
 +2
 
 
-friend: By the way, what do you like to do for fun?
+me: hey james
 
->Videos Games
-	I like playing video games.
++4
+
+friend: hey! whats up?
+
+>not much
+	not much, you?
 	+
->Movies
-	I like watching movies.
-	+
->Anime
-	I like watching anime.
-	+
->Music
-	I like chilling and listening to music.
+>my blood pressure
+	just my blood pressure. you?
 	+
 =
 
-+1
-me: What about you?
+friend: I did something crazy the other day
 
-friend: Hmmm.
-friend: I guess I like everything.
-friend: 'Fun' is subjective.
-friend: So I could see myself getting into literally anything and enjoying it all the same.
-
->That's smart.
-	Wow, that's a good way to see it.
-	friend: thank you!
->Yea right.
-	So you're saying you could have fun killing people?
-	->murder
+>whats that?
+	oh yeah? whats that?
+	+
+>you talked to a girl?
+	no way! you finally talked to a girl?
+	friend: yea yea. shutup
 =
 
-->after
-#murder
-friend: Well, I probably wouldn't get very far without getting caught...
-friend: But Ted Bundy clearly found enjoyment in it XD.
-#after
+friend: have you ever heard of the Faceless Child?
+
+>no
+	nope, whats that?
+	+
+>yes
+	I have now. wtf is it?
+	+
+=
+
+
+friend: there was a young boy named Timmy who disappeared while playing at the nearby playground like 9 years ago
+
+$music|horror_horror.mp3|5
+
+friend: some say he was kidnapped, while others believe he got lost in another dimension
+friend: his body was never found, and over time, stories of his spirit began to circulate
+friend: it was in the newspaper too. here
++3
+friend: |news.png
+
+// TODO: make fake news article and add clickable links in the game
+
+>sounds terrifying!
+	that sounds terrifying!
+	friend: I know, right? but here's the freaky part...
+>urban legends...
+	people really love their urban legends
+	friend: yeah, but here's the freaky part...
+=
+
+friend: turns out theres a way to summon his spirit
+friend: and I tried it last night
+
+//TODO: make fake website about summoning instructions
+
+>summon him?
+	summon him? like, a ghost?
+	friend: yeah, exactly
+>sure
+	sure dude. I think you've been watching too much history channel
+	friend: this one is real, I promise
+=
+
+friend: it's some creepy ritual
+
+>what kind of ritual?
+	what kind of ritual? what do you have to do?
+	friend: you can read up all about it online
+>thats ridiculous
+	thats ridiculous. people will believe anything
+	friend: maybe, but listen to this...
+=
+
+friend: you have to go to the playground at dusk
+friend: bring a toy, a piece of chalk, and some salt
+friend: draw a circle with the chalk, place the toy in the center, and surround it with salt
+
+>did you do it?
+	please tell me you didn't actually do it
+	friend: of course I did! you know me
+>sounds complicated
+	sounds like a lot of work for a prank
+	friend: maybe, but curiosity got the best of me
+=
+
+friend: and at first, nothing happened
+friend: I felt like an idiot, just standing there
+friend: then I heard it
+friend: a giggle, like a child's giggle
+
+>what did you do?
+	what happened next?
+	friend: I froze, man. I was so freaked out
+>no way
+	youre making this up
+	friend: I wish I was
+=
+
+friend: the toy in the center started moving on its own
+friend: it rolled out of the circle, like someone pushed it
+friend: then I felt this icy cold touch on my neck
+
+>that's insane!
+	that's insane! you must have been terrified
+	friend: you have no idea. I bolted out of there
+>it was the wind
+	it was probably just the wind man
+	friend: I didn't stick around to find out!
+=
+
+friend: ever since then, weird things have been happening at my place
+friend: I hear giggling at night
+friend: and I swear I've seen shadows moving in the corner of my eye
+
+>you need to get out of there
+	you should probably leave your house
+	friend: I can't just leave. it's my home
+>you should get help
+	maybe you should talk to a professional or something
+	friend: who? who would believe me?
+=
 
 +3
-friend: Favourite Colour?
 
->Blue
-	I like blue.
+friend: wait, I just heard something
+
+$music_stop
+
+>hear what?
+	"
 	+
->Red
-	I like red.
-	+
->Green
-	I like green.
-	+
->Purple
-	I like purple.
-	+
->Black
-	I like black.
-	+
->Pink
-	I like pink.
-	+
->Yellow
-	I like yellow.
-	+
->Orange
-	I like orange.
+>james?
+	"
 	+
 =
 
-friend: very nice.
++4
 
-+1
-me: You?
-friend: I'll give you one hint.
-friend: It's in my username :)
-+1
-me: Hmm....
-+1
-me: ink?
-friend: Yes... specifically PINK ink.
+friend: somethings outside my window
 
->Favourite Food?
-	Favourite Food?
+>get out of there!
+	"
+	+
+>call the police!
+	"
 	+
 =
 
++4
+
+friend: i cant
 +1
-me: wait, is that in your username too?
+friend: its already inside
 
-friend: NO! I would never eat a mink.
-friend: Besides, I'm on a vegetarian diet.
++3
 
-+1
-me: oh, so what do you eat?
+friend: its here
+friend: its looking at me
 
-friend: mostly junk food.
-friend: you can never go wrong with icecream.
+>james, run!
+	"
+	+
+>hide!
+	"
+	+
+=
+
+friend: i cant move
+friend: its right in front of me
+
++4
+
+me: James?
+
++2
+
+friend: help me
+
++5
+
+:User has logged off.
+
++3
+
+$title|The End
+
+
+
+
 
 
 

@@ -24,7 +24,8 @@ setfenv(1, P)
 -- Constants
 
 Max_messages = 20
-Force_Choice_Messages = false
+Force_Choice_Messages = true
+Force_Select_Choice = true
 
 Headers = {"title", "author", "version", "desc", "rating", "lang"}
 Command = {}
@@ -33,6 +34,10 @@ Command = {}
 -- Built In Functions
 
 function load()
+	
+	-- if love.filesystem.isFused() then
+	-- 	love.filesystem.mount(love.filesystem.getSourceBaseDirectory(), "") -- TODO: come up with file layout
+	-- end
 	
 	story_loaded = false
 	sound = {}
@@ -86,13 +91,7 @@ function loadStory(name)
 	
 	if story_loaded then
 		
-		io.close(story_file)
-		
-	end
-	
-	if love.filesystem.isFused() then
-		love.filesystem.mount(love.filesystem.getSourceBaseDirectory(), "") -- TODO: come up with file layout
-	else
+		-- io.close(story_file)
 		
 	end
 	
@@ -107,13 +106,13 @@ function loadStory(name)
 		char = {}
 		me = {}
 		char["me"] = me
-		if L.ui.username and L.ui.username ~= "" then
-			me.name = L.ui.username
+		if L.chat.username and L.chat.username ~= "" then
+			me.name = L.chat.username
 		else
 			me.name = "You"
 		end
-		if L.ui.profile_pic then
-			me.pic = L.ui.profile_pic
+		if L.chat.profile_pic then
+			me.pic = L.chat.profile_pic
 		else
 			-- me.pic = love.graphics.newImage(story_path.."/images/ai.png")
 		end
@@ -132,11 +131,16 @@ function loadStory(name)
 		local p = story_path.."/music"
 		for _, this in pairs (love.filesystem.getDirectoryItems(p)) do
 			if love.filesystem.getInfo(p.."/"..this).type == "file" and (string.sub(this, #this - 3) == ".ogg" or string.sub(this, #this - 3) == ".wav" or string.sub(this, #this - 3) == ".mp3") then
-				music[this] = love.audio.newSource(p.."/"..this, "stream")
+				if BROWSER_MODE then
+					music[this] = love.audio.newSource(p.."/"..this, "static")
+				else
+					music[this] = love.audio.newSource(p.."/"..this, "stream")
+				end
 			end
 		end
 		music_playing = nil
 		music_to_play = nil
+		music_to_stop = nil
 		music_fade_time = 0
 		music_fade_tick = 0
 		music_queued = nil
@@ -146,15 +150,19 @@ function loadStory(name)
 			LoadLibrary(p.."/"..this, story_name.."_"..string.sub(this, 1, #this - 4))
 		end
 		
-		story_file = io.open(story_path.."/story.txt")
-		file_line_iter = story_file:lines()
+		-- story_file = io.open(story_path.."/story.txt")
+		-- file_line_iter = story_file:lines()
+		file_line_iter = love.filesystem.lines(story_path.."/story.txt")
 		file_line_prog = 0
 		labels = {}
 		
 		getHeader()
 		
+		return true
 	else
+		
 		love.errhand("Failed to load story: "..name)
+		return false
 	end
 	
 end
@@ -318,7 +326,7 @@ end
 
 Command["send"] = function(args)
 	
-	if args[1] == "me" and Force_Choice_Messages then
+	if args[1] == "me" and Force_Choice_Messages and args[2] ~= "" then
 		Command["choice"]({args[2], args[2], "+"})
 		
 	elseif args[1] == "" or not args[1] or args[1] == "me" then
@@ -356,7 +364,7 @@ Command["send_plain"] = function(args)
 		args[3] = love.graphics.newImage(story_path.."/images/"..args[3])
 	end
 	
-	L.ui.sendMessage(char[args[1]], args[2], args[3])
+	L.chat.sendMessage(char[args[1]], args[2], args[3])
 	
 	return true
 	
@@ -414,8 +422,9 @@ Command["jump_up"] = function(args)
 	
 	if labels[args[1]] then
 		local stop_line = labels[args[1]]
-		story_file = io.open(story_path.."/story.txt")
-		file_line_iter = story_file:lines()
+		-- story_file = io.open(story_path.."/story.txt")
+		-- file_line_iter = story_file:lines()
+		file_line_iter = love.filesystem.lines(story_path.."/story.txt")
 		file_line_prog = 0
 		labels = {}
 		while file_line_prog < stop_line do
@@ -443,7 +452,21 @@ Command["choice"] = function(args)
 		replies = {}
 	end
 	
+	if args[2] == "\"" then
+		args[2] = args[1]
+	end
+	-- print("choise"..args[2])
+	
 	table.insert(replies, {short = replaceVars(args[1]), long = replaceVars(args[2]), command = args[3]})
+	
+	if Force_Select_Choice then
+		if #replies == 1 then
+			L.chat.selectReply(1)
+		else
+			-- L.chat.backspaceReply()
+			L.chat.typed_reply = nil
+		end
+	end
 	
 	return true
 	
@@ -614,8 +637,9 @@ Command["music"] = function(args)
 		end
 		
 		music_playing = music[args[1]]
-		music_playing:play()
 		music_playing:setLooping(true)
+		music_playing:setVolume(1)
+		music_playing:play()
 		
 	end
 	
@@ -629,7 +653,8 @@ Command["music_stop"] = function(args)
 	if args and args[1] then
 		
 		args[1] = replaceVars(args[1])
-		-- TODO: Fade out
+		
+		
 		
 	else
 		
@@ -639,11 +664,15 @@ Command["music_stop"] = function(args)
 		
 	end
 	
+	return true
+	
 end
 
 Command["music_q"] = function(args)
 	
 	-- music_queued
+	
+	return true
 	
 end
 
@@ -694,7 +723,7 @@ Command["type"] = function(args)
 	
 end
 
-Command["cls"] = function(args)
+Command["clear"] = function(args)
 	
 	chat_log = {}
 	
@@ -704,11 +733,12 @@ end
 
 Command["title"] = function(args)
 	
-	L.ui.title_text = args[1]
+	L.chat.title_text = args[1]
 	if args[2] then
-		L.ui.title_sub_text = args[2]
+		L.chat.title_sub_text = args[2]
 	end
-	L.ui.title_tick = 0
+	L.chat.title_tick = 0
+	-- TODO: custom title time
 	
 end
 
